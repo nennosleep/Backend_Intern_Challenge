@@ -1,9 +1,11 @@
 -- CreateEnum
 CREATE TYPE "ConversationStatus" AS ENUM ('OPEN', 'ASSIGNED', 'PENDING', 'CLOSED');
+CREATE TYPE "SenderType" AS ENUM ('USER', 'CUSTOMER');
+CREATE TYPE "ParticipantType" AS ENUM ('USER', 'CUSTOMER');
 
 -- CreateTable
 CREATE TABLE "users" (
-    "id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
     "email" TEXT NOT NULL,
     "password_hash" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -15,7 +17,7 @@ CREATE TABLE "users" (
 
 -- CreateTable
 CREATE TABLE "roles" (
-    "id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
     "name" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -24,9 +26,9 @@ CREATE TABLE "roles" (
 
 -- CreateTable
 CREATE TABLE "user_roles" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
-    "role_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "role_id" UUID NOT NULL,
     "assigned_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "user_roles_pkey" PRIMARY KEY ("id")
@@ -34,7 +36,7 @@ CREATE TABLE "user_roles" (
 
 -- CreateTable
 CREATE TABLE "customers" (
-    "id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
     "name" TEXT NOT NULL,
     "email" TEXT,
     "phone" TEXT,
@@ -46,8 +48,8 @@ CREATE TABLE "customers" (
 
 -- CreateTable
 CREATE TABLE "conversations" (
-    "id" TEXT NOT NULL,
-    "customer_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "customer_id" UUID NOT NULL,
     "status" "ConversationStatus" NOT NULL DEFAULT 'OPEN',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -57,19 +59,26 @@ CREATE TABLE "conversations" (
 
 -- CreateTable
 CREATE TABLE "conversation_members" (
-    "id" TEXT NOT NULL,
-    "conversation_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "conversation_id" UUID NOT NULL,
+    "participant_type" "ParticipantType" NOT NULL,
+    "user_id" UUID,
+    "customer_id" UUID,
     "joined_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "conversation_members_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "conversation_members_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "conversation_members_participant_check" CHECK (
+        (user_id IS NOT NULL AND customer_id IS NULL AND participant_type = 'USER') OR
+        (user_id IS NULL AND customer_id IS NOT NULL AND participant_type = 'CUSTOMER')
+    )
 );
 
 -- CreateTable
 CREATE TABLE "messages" (
-    "id" TEXT NOT NULL,
-    "conversation_id" TEXT NOT NULL,
-    "sender_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "conversation_id" UUID NOT NULL,
+    "sender_id" UUID NOT NULL,
+    "sender_type" "SenderType" NOT NULL,
     "content" TEXT NOT NULL,
     "sent_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -78,9 +87,10 @@ CREATE TABLE "messages" (
 
 -- CreateTable
 CREATE TABLE "assignments" (
-    "id" TEXT NOT NULL,
-    "conversation_id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "conversation_id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
     "assigned_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "unassigned_at" TIMESTAMP(3),
 
@@ -89,8 +99,8 @@ CREATE TABLE "assignments" (
 
 -- CreateTable
 CREATE TABLE "notifications" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "user_id" UUID NOT NULL,
     "content" TEXT NOT NULL,
     "is_read" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -100,7 +110,7 @@ CREATE TABLE "notifications" (
 
 -- CreateTable
 CREATE TABLE "webhook_events" (
-    "id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
     "event_id" TEXT NOT NULL,
     "payload" JSONB NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -110,8 +120,8 @@ CREATE TABLE "webhook_events" (
 
 -- CreateTable
 CREATE TABLE "attachments" (
-    "id" TEXT NOT NULL,
-    "message_id" TEXT NOT NULL,
+    "id" UUID NOT NULL,
+    "message_id" UUID NOT NULL,
     "file_name" TEXT NOT NULL,
     "file_type" TEXT NOT NULL,
     "file_size" INTEGER NOT NULL,
@@ -123,11 +133,12 @@ CREATE TABLE "attachments" (
 
 -- CreateTable
 CREATE TABLE "activity_logs" (
-    "id" TEXT NOT NULL,
-    "user_id" TEXT,
-    "conversation_id" TEXT,
+    "id" UUID NOT NULL,
+    "user_id" UUID,
+    "entity_type" TEXT NOT NULL,
+    "entity_id" UUID,
     "action" TEXT NOT NULL,
-    "description" TEXT,
+    "metadata" JSONB,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "activity_logs_pkey" PRIMARY KEY ("id")
@@ -173,10 +184,13 @@ CREATE INDEX "conversation_members_conversation_id_idx" ON "conversation_members
 CREATE INDEX "conversation_members_user_id_idx" ON "conversation_members"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "conversation_members_conversation_id_user_id_key" ON "conversation_members"("conversation_id", "user_id");
+CREATE INDEX "conversation_members_customer_id_idx" ON "conversation_members"("customer_id");
 
 -- CreateIndex
-CREATE INDEX "messages_conversation_id_idx" ON "messages"("conversation_id");
+CREATE UNIQUE INDEX "conversation_members_conversation_id_user_id_customer_id_key" ON "conversation_members"("conversation_id", "user_id", "customer_id");
+
+-- CreateIndex
+CREATE INDEX "messages_conversation_id_sent_at_idx" ON "messages"("conversation_id", "sent_at");
 
 -- CreateIndex
 CREATE INDEX "messages_sender_id_idx" ON "messages"("sender_id");
@@ -186,6 +200,9 @@ CREATE INDEX "assignments_conversation_id_idx" ON "assignments"("conversation_id
 
 -- CreateIndex
 CREATE INDEX "assignments_user_id_idx" ON "assignments"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "assignments_conversation_active_idx" ON "assignments" ("conversation_id") WHERE ("is_active" = true);
 
 -- CreateIndex
 CREATE INDEX "notifications_user_id_idx" ON "notifications"("user_id");
@@ -203,7 +220,7 @@ CREATE INDEX "attachments_message_id_idx" ON "attachments"("message_id");
 CREATE INDEX "activity_logs_user_id_idx" ON "activity_logs"("user_id");
 
 -- CreateIndex
-CREATE INDEX "activity_logs_conversation_id_idx" ON "activity_logs"("conversation_id");
+CREATE INDEX "activity_logs_entity_type_entity_id_idx" ON "activity_logs"("entity_type", "entity_id");
 
 -- AddForeignKey
 ALTER TABLE "user_roles" ADD CONSTRAINT "user_roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -218,13 +235,13 @@ ALTER TABLE "conversations" ADD CONSTRAINT "conversations_customer_id_fkey" FORE
 ALTER TABLE "conversation_members" ADD CONSTRAINT "conversation_members_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "conversation_members" ADD CONSTRAINT "conversation_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "conversation_members" ADD CONSTRAINT "conversation_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "conversation_members" ADD CONSTRAINT "conversation_members_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "customers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "messages" ADD CONSTRAINT "messages_sender_id_fkey" FOREIGN KEY ("sender_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "assignments" ADD CONSTRAINT "assignments_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -240,6 +257,3 @@ ALTER TABLE "attachments" ADD CONSTRAINT "attachments_message_id_fkey" FOREIGN K
 
 -- AddForeignKey
 ALTER TABLE "activity_logs" ADD CONSTRAINT "activity_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "activity_logs" ADD CONSTRAINT "activity_logs_conversation_id_fkey" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("id") ON DELETE SET NULL ON UPDATE CASCADE;

@@ -7,7 +7,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// enum
+//enum
+
 enum ConversationStatus {
   OPEN
   ASSIGNED
@@ -15,30 +16,39 @@ enum ConversationStatus {
   CLOSED
 }
 
-// users
+enum SenderType {
+  USER
+  CUSTOMER
+}
+
+enum ParticipantType {
+  USER
+  CUSTOMER
+}
+
+//users
+
 model User {
-  id String @id @default(uuid())
-  email String @unique
-  passwordHash String @map("password_hash")
-  name String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  userRoles UserRole[]
+  userRoles           UserRole[]
   conversationMembers ConversationMember[]
-  messages Message[]
-  assignments Assignment[]
-  notifications Notification[]
-  activityLogs ActivityLog[]
+  assignments         Assignment[]
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
 
-  @@index([email])
   @@map("users")
 }
 
-// roles
+//roles
 model Role {
-  id String @id @default(uuid())
-  name String @unique
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
   createdAt DateTime @default(now()) @map("created_at")
 
   userRoles UserRole[]
@@ -46,11 +56,11 @@ model Role {
   @@map("roles")
 }
 
-// user_roles
+//user_roles
 model UserRole {
-  id String @id @default(uuid())
-  userId String @map("user_id")
-  roleId String @map("role_id")
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
   assignedAt DateTime @default(now()) @map("assigned_at")
 
   user User @relation(fields: [userId], references: [id])
@@ -62,96 +72,101 @@ model UserRole {
   @@map("user_roles")
 }
 
-// customers
+//customers
 model Customer {
-  id String @id @default(uuid())
-  name String
-  email String? @unique
-  phone String? @unique
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String?  @unique
+  phone     String?  @unique
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  conversations Conversation[]
+  conversations       Conversation[]
+  conversationMembers ConversationMember[]
 
   @@index([name])
   @@map("customers")
 }
 
-// conversations
-model Conversation {
-  id String @id @default(uuid())
-  customerId String @map("customer_id")
-  status ConversationStatus @default(OPEN)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+//conversations
 
-  customer Customer @relation(fields: [customerId], references: [id])
-  members ConversationMember[]
-  messages Message[]
+model Conversation {
+  id         String             @id @default(uuid()) @db.Uuid
+  customerId String             @map("customer_id") @db.Uuid
+  status     ConversationStatus @default(OPEN)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  customer    Customer             @relation(fields: [customerId], references: [id])
+  members     ConversationMember[]
+  messages    Message[]
   assignments Assignment[]
-  activityLogs ActivityLog[]
 
   @@index([customerId])
   @@index([status])
   @@map("conversations")
 }
 
-// conversation_members
+//conversation_members
 model ConversationMember {
-  id String @id @default(uuid())
-  conversationId String @map("conversation_id")
-  userId String @map("user_id")
-  joinedAt DateTime @default(now()) @map("joined_at")
+  id              String          @id @default(uuid()) @db.Uuid
+  conversationId  String          @map("conversation_id") @db.Uuid
+  participantType ParticipantType @map("participant_type")
+  userId          String?         @map("user_id") @db.Uuid
+  customerId      String?         @map("customer_id") @db.Uuid
+  joinedAt        DateTime        @default(now()) @map("joined_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
 
-  @@unique([conversationId, userId])
+  @@unique([conversationId, userId, customerId])
   @@index([conversationId])
   @@index([userId])
+  @@index([customerId])
   @@map("conversation_members")
 }
 
-// messages
+//messages
 model Message {
-  id String @id @default(uuid())
-  conversationId String @map("conversation_id")
-  senderId String @map("sender_id")
-  content String
-  sentAt DateTime @default(now()) @map("sent_at")
+  id             String     @id @default(uuid()) @db.Uuid
+  conversationId String     @map("conversation_id") @db.Uuid
+  senderId       String     @map("sender_id") @db.Uuid
+  senderType     SenderType @map("sender_type")
+  content        String
+  sentAt         DateTime   @default(now()) @map("sent_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id])
-  sender User @relation(fields: [senderId], references: [id])
-  attachments Attachment[]
+  attachments  Attachment[]
 
-  @@index([conversationId])
+  @@index([conversationId, sentAt])
   @@index([senderId])
   @@map("messages")
 }
 
-
-// assignments
+//assignment
 model Assignment {
-  id String @id @default(uuid())
-  conversationId String @map("conversation_id")
-  userId String @map("user_id")
-  assignedAt DateTime @default(now()) @map("assigned_at")
-  unassignedAt DateTime? @map("unassigned_at")
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  isActive       Boolean   @default(true) @map("is_active")
+  assignedAt     DateTime  @default(now()) @map("assigned_at")
+  unassignedAt   DateTime? @map("unassigned_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
   @@index([conversationId])
   @@index([userId])
   @@map("assignments")
 }
 
-// notifications
+//notifications
 model Notification {
-  id String @id @default(uuid())
-  userId String @map("user_id")
-  content String
-  isRead Boolean @default(false) @map("is_read")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  content   String
+  isRead    Boolean  @default(false) @map("is_read")
   createdAt DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])
@@ -160,25 +175,25 @@ model Notification {
   @@map("notifications")
 }
 
-// webhook_envents
+//webhook_events
 model WebhookEvent {
-  id String @id @default(uuid())
-  eventId String @unique @map("event_id")
-  payload Json
+  id        String   @id @default(uuid()) @db.Uuid
+  eventId   String   @unique @map("event_id")
+  payload   Json
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([eventId])
   @@map("webhook_events")
 }
 
-// attachments
+//attachments
 model Attachment {
-  id String @id @default(uuid())
-  messageId String @map("message_id")
-  fileName String @map("file_name")
-  fileType String @map("file_type")
-  fileSize Int @map("file_size")
-  filePath String @map("file_path")
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  fileName  String   @map("file_name")
+  fileType  String   @map("file_type")
+  fileSize  Int      @map("file_size")
+  filePath  String   @map("file_path")
   createdAt DateTime @default(now()) @map("created_at")
 
   message Message @relation(fields: [messageId], references: [id])
@@ -187,19 +202,19 @@ model Attachment {
   @@map("attachments")
 }
 
-// activity_logs
+//activity_logs
 model ActivityLog {
-  id String @id @default(uuid())
-  userId String? @map("user_id")
-  conversationId String? @map("conversation_id")
-  action String
-  description String?
-  createdAt DateTime @default(now()) @map("created_at")
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id") @db.Uuid
+  action     String
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
 
   user User? @relation(fields: [userId], references: [id])
-  conversation Conversation? @relation(fields: [conversationId], references: [id])
 
   @@index([userId])
-  @@index([conversationId])
+  @@index([entityType, entityId])
   @@map("activity_logs")
 }
