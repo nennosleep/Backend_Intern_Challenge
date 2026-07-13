@@ -20,7 +20,7 @@ export const authGuard = (
       errors: null,
     });
   }
-  const token = authHeader.split('')[1];
+  const token = authHeader.split(' ')[1];
   try {
     const payload = verifyToken(token);
     req.user = payload;

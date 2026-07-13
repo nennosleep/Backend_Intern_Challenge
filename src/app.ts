@@ -3,6 +3,7 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import { healthCheck } from './modules/health/health.controller';
 import authRoute from './modules/auth/auth.route';
+import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
 
@@ -14,5 +15,6 @@ app.use(
 );
 app.use('/api', healthCheck);
 app.use('/api', authRoute);
+app.use(errorHandler);
 
 export default app;

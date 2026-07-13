@@ -20,7 +20,9 @@ export const authController = {
       const parsed = loginSchema.parse(req.body);
       const result = await authService.login(parsed);
       res.status(200).json(successResponse(result, 'Login successful'));
-    } catch (error) {}
+    } catch (error) {
+      next(error);
+    }
   },
 
   profile: async (req: AuthRequest, res: Response, next: NextFunction) => {
