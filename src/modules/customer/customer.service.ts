@@ -1,9 +1,10 @@
 import { customerRepository } from './customer.repository';
 import { CreateCustomerDto, UpdateCustomerDto } from './customer.dto';
 import { createActivityLog } from '../../common/activityLog';
+import { Prisma } from '@prisma/client';
 
 export const customerService = {
-  create: async (data: CreateCustomerDto) => {
+  create: async (data: CreateCustomerDto, userId?: string) => {
     if (data.email || data.phone) {
       const existing = await customerRepository.findByEmailOrPhone(
         data.email,
@@ -11,19 +12,29 @@ export const customerService = {
       );
       if (existing) {
         const error: any = new Error('Email or phone already exists');
-        error.statusCode = 400;
+        error.statusCode = 409;
         throw error;
       }
     }
 
-    const customer = await customerRepository.create(data);
+    try {
+      const customer = await customerRepository.create(data);
 
-    await createActivityLog({
-      action: 'CREATE_CUSTOMER',
-      description: `Customer "${customer.name}" was created`,
-    });
+      await createActivityLog({
+        action: 'CREATE_CUSTOMER',
+        description: `Customer "${customer.name}" was created`,
+        userId,
+      });
 
-    return customer;
+      return customer;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const error: any = new Error('Email or phone already exists');
+        error.statusCode = 409;
+        throw error;
+      }
+      throw err;
+    }
   },
 
   findMany: async (query: {
@@ -60,7 +71,7 @@ export const customerService = {
     return customer;
   },
 
-  update: async (id: string, data: UpdateCustomerDto) => {
+  update: async (id: string, data: UpdateCustomerDto, userId?: string) => {
     await customerService.findById(id); // đảm bảo tồn tại
 
     if (data.email || data.phone) {
@@ -70,19 +81,29 @@ export const customerService = {
       );
       if (existing && existing.id !== id) {
         const error: any = new Error('Email or phone already exists');
-        error.statusCode = 400;
+        error.statusCode = 409;
         throw error;
       }
     }
 
-    const customer = await customerRepository.update(id, data);
+    try {
+      const customer = await customerRepository.update(id, data);
 
-    await createActivityLog({
-      action: 'UPDATE_CUSTOMER',
-      description: `Customer "${customer.name}" was updated`,
-    });
+      await createActivityLog({
+        action: 'UPDATE_CUSTOMER',
+        description: `Customer "${customer.name}" was updated`,
+        userId,
+      });
 
-    return customer;
+      return customer;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const error: any = new Error('Email or phone already exists');
+        error.statusCode = 409;
+        throw error;
+      }
+      throw err;
+    }
   },
 
   delete: async (id: string) => {

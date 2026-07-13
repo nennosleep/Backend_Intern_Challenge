@@ -1,13 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { customerService } from './customer.service';
-import { createCustomerSchema, updateCustomerSchema } from './customer.dto';
+import { createCustomerSchema, updateCustomerSchema, customerQuerySchema } from './customer.dto';
 import { successResponse } from '../../common/response';
 
 export const customerController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = createCustomerSchema.parse(req.body);
-      const customer = await customerService.create(parsed);
+      const userId = (req as any).user?.userId || (req as any).user?.id;
+      const customer = await customerService.create(parsed, userId);
       res.status(201).json(successResponse(customer, 'Customer created'));
     } catch (err) {
       next(err);
@@ -16,12 +17,8 @@ export const customerController = {
 
   findMany: async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { search, page, limit } = req.query;
-      const result = await customerService.findMany({
-        search: search as string,
-        page: page ? Number(page) : undefined,
-        limit: limit ? Number(limit) : undefined,
-      });
+      const parsed = customerQuerySchema.parse(req.query);
+      const result = await customerService.findMany(parsed);
       res.status(200).json(successResponse(result, 'Customers retrieved'));
     } catch (err) {
       next(err);
@@ -40,7 +37,8 @@ export const customerController = {
   update: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = updateCustomerSchema.parse(req.body);
-      const customer = await customerService.update(req.params.id, parsed);
+      const userId = (req as any).user?.userId || (req as any).user?.id;
+      const customer = await customerService.update(req.params.id, parsed, userId);
       res.status(200).json(successResponse(customer, 'Customer updated'));
     } catch (err) {
       next(err);

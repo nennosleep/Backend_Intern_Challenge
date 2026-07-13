@@ -14,3 +14,17 @@ export const updateCustomerSchema = z.object({
 
 export type CreateCustomerDto = z.infer<typeof createCustomerSchema>;
 export type UpdateCustomerDto = z.infer<typeof updateCustomerSchema>;
+
+export const customerQuerySchema = z.object({
+  search: z.string().optional(),
+  page: z.preprocess(
+    (val) => (val === undefined || val === '' ? undefined : Number(val)),
+    z.number().int().positive('Page must be a positive integer').optional()
+  ),
+  limit: z.preprocess(
+    (val) => (val === undefined || val === '' ? undefined : Number(val)),
+    z.number().int().positive('Limit must be a positive integer').optional()
+  ),
+});
+
+export type CustomerQueryDto = z.infer<typeof customerQuerySchema>;
