@@ -1,5 +1,7 @@
 import { conversationRepository } from './conversation.repository';
 import { prisma } from '../../config/prisma';
+import { createActivityLog } from '../../common/activityLog';
+
 
 export const conversationService = {
   create: async (customerId: string, userId: string) => {
@@ -82,5 +84,132 @@ export const conversationService = {
         totalPages: Math.ceil(total / limit),
       },
     };
+  },
+
+  // ── Assignment & Status ──────────────────────────────────────────────────
+
+  assign: async (conversationId: string, staffUserId: string, actorUserId: string) => {
+    // 1. Kiểm tra conversation tồn tại
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation) {
+      const error: any = new Error('Conversation not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. Không assign nếu đã CLOSED
+    if (conversation.status === 'CLOSED') {
+      const error: any = new Error('Cannot assign a CLOSED conversation. Please reopen it first.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // 3. Kiểm tra staff tồn tại
+    const staff = await prisma.user.findUnique({ where: { id: staffUserId } });
+    if (!staff) {
+      const error: any = new Error('Staff user not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const assignment = await conversationRepository.assign(conversationId, staffUserId);
+
+    await createActivityLog({
+      action: 'CONVERSATION_ASSIGNED',
+      userId: actorUserId,
+      entityType: 'CONVERSATION',
+      entityId: conversationId,
+      metadata: { assignedTo: staffUserId },
+    }).catch(() => {});
+
+    return assignment;
+  },
+
+  unassign: async (conversationId: string, actorUserId: string) => {
+    // 1. Kiểm tra conversation tồn tại
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation) {
+      const error: any = new Error('Conversation not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. Kiểm tra có assignment đang active không
+    const activeAssignment = await conversationRepository.getActiveAssignment(conversationId);
+    if (!activeAssignment) {
+      const error: any = new Error('No active assignment found for this conversation');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const result = await conversationRepository.unassign(conversationId);
+
+    await createActivityLog({
+      action: 'CONVERSATION_UNASSIGNED',
+      userId: actorUserId,
+      entityType: 'CONVERSATION',
+      entityId: conversationId,
+      metadata: { unassignedFrom: activeAssignment.userId },
+    }).catch(() => {});
+
+    return result;
+  },
+
+  close: async (conversationId: string, actorUserId: string) => {
+    // 1. Kiểm tra conversation tồn tại
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation) {
+      const error: any = new Error('Conversation not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. Không close nếu đã CLOSED rồi
+    if (conversation.status === 'CLOSED') {
+      const error: any = new Error('Conversation is already closed');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const result = await conversationRepository.close(conversationId);
+
+    await createActivityLog({
+      action: 'CONVERSATION_CLOSED',
+      userId: actorUserId,
+      entityType: 'CONVERSATION',
+      entityId: conversationId,
+      metadata: { previousStatus: conversation.status },
+    }).catch(() => {});
+
+    return result;
+  },
+
+  reopen: async (conversationId: string, actorUserId: string) => {
+    // 1. Kiểm tra conversation tồn tại
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation) {
+      const error: any = new Error('Conversation not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. Chỉ có thể reopen nếu đang CLOSED
+    if (conversation.status !== 'CLOSED') {
+      const error: any = new Error(`Cannot reopen a conversation with status: ${conversation.status}`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const result = await conversationRepository.reopen(conversationId);
+
+    await createActivityLog({
+      action: 'CONVERSATION_REOPENED',
+      userId: actorUserId,
+      entityType: 'CONVERSATION',
+      entityId: conversationId,
+      metadata: {},
+    }).catch(() => {});
+
+    return result;
   },
 };

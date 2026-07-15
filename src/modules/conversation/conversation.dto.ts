@@ -22,3 +22,10 @@ export const conversationQuerySchema = z.object({
 export type CreateConversationDto = z.infer<typeof createConversationSchema>;
 export type CreateMessageDto = z.infer<typeof createMessageSchema>;
 export type ConversationQueryDto = z.infer<typeof conversationQuerySchema>;
+
+export const assignConversationSchema = z.object({
+  staffUserId: z.string().uuid('staffUserId must be a valid UUID'),
+});
+
+export type AssignConversationDto = z.infer<typeof assignConversationSchema>;
+

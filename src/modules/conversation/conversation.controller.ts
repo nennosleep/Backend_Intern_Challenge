@@ -1,7 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from '../../middlewares/authGuard';
 import { conversationService } from './conversation.service';
-import { createConversationSchema, createMessageSchema, conversationQuerySchema } from './conversation.dto';
+import { createConversationSchema, createMessageSchema, conversationQuerySchema, assignConversationSchema } from './conversation.dto';
 import { successResponse } from '../../common/response';
 
 export const conversationController = {
@@ -54,6 +54,49 @@ export const conversationController = {
       const userId = req.user!.userId;
       const result = await conversationService.getMessages(req.params.id, userId, parsed);
       res.status(200).json(successResponse(result, 'Messages retrieved'));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  // ── Assignment & Status ──────────────────────────────────────────────────
+
+  assign: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const { staffUserId } = assignConversationSchema.parse(req.body);
+      const actorUserId = req.user!.userId;
+      const result = await conversationService.assign(req.params.id, staffUserId, actorUserId);
+      res.status(200).json(successResponse(result, 'Conversation assigned successfully'));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  unassign: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const actorUserId = req.user!.userId;
+      const result = await conversationService.unassign(req.params.id, actorUserId);
+      res.status(200).json(successResponse(result, 'Conversation unassigned successfully'));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  close: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const actorUserId = req.user!.userId;
+      const result = await conversationService.close(req.params.id, actorUserId);
+      res.status(200).json(successResponse(result, 'Conversation closed successfully'));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  reopen: async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const actorUserId = req.user!.userId;
+      const result = await conversationService.reopen(req.params.id, actorUserId);
+      res.status(200).json(successResponse(result, 'Conversation reopened successfully'));
     } catch (error) {
       next(error);
     }

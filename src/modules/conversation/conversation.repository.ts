@@ -124,4 +124,79 @@ export const conversationRepository = {
       where: { conversationId },
     });
   },
+
+  // ── Assignment & Status ──────────────────────────────────────────────────
+
+  getActiveAssignment: async (conversationId: string) => {
+    return prisma.assignment.findFirst({
+      where: { conversationId, isActive: true },
+    });
+  },
+
+  assign: async (conversationId: string, staffUserId: string) => {
+    return prisma.$transaction(async (tx) => {
+      // 1. Deactivate all existing active assignments for this conversation
+      await tx.assignment.updateMany({
+        where: { conversationId, isActive: true },
+        data: { isActive: false, unassignedAt: new Date() },
+      });
+
+      // 2. Create new active assignment
+      const assignment = await tx.assignment.create({
+        data: { conversationId, userId: staffUserId, isActive: true },
+      });
+
+      // 3. Update conversation status to ASSIGNED
+      await tx.conversation.update({
+        where: { id: conversationId },
+        data: { status: ConversationStatus.ASSIGNED },
+      });
+
+      // 4. Add staff as a member if not already
+      const existingMember = await tx.conversationMember.findFirst({
+        where: { conversationId, userId: staffUserId },
+      });
+      if (!existingMember) {
+        await tx.conversationMember.create({
+          data: {
+            conversationId,
+            participantType: ParticipantType.USER,
+            userId: staffUserId,
+          },
+        });
+      }
+
+      return assignment;
+    });
+  },
+
+  unassign: async (conversationId: string) => {
+    return prisma.$transaction(async (tx) => {
+      // 1. Deactivate active assignment
+      await tx.assignment.updateMany({
+        where: { conversationId, isActive: true },
+        data: { isActive: false, unassignedAt: new Date() },
+      });
+
+      // 2. Update conversation status back to OPEN
+      return tx.conversation.update({
+        where: { id: conversationId },
+        data: { status: ConversationStatus.OPEN },
+      });
+    });
+  },
+
+  close: async (conversationId: string) => {
+    return prisma.conversation.update({
+      where: { id: conversationId },
+      data: { status: ConversationStatus.CLOSED },
+    });
+  },
+
+  reopen: async (conversationId: string) => {
+    return prisma.conversation.update({
+      where: { id: conversationId },
+      data: { status: ConversationStatus.OPEN },
+    });
+  },
 };
