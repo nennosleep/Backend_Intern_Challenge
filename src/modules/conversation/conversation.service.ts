@@ -1,24 +1,41 @@
 import { conversationRepository } from './conversation.repository';
 import { prisma } from '../../config/prisma';
 import { createActivityLog } from '../../common/activityLog';
+import { AppError } from '../../common/appError';
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches the role names of a given user from the database.
+ */
+async function getUserRoles(userId: string): Promise<string[]> {
+  const userRoles = await prisma.userRole.findMany({
+    where: { userId },
+    include: { role: true },
+  });
+  return userRoles.map((ur) => ur.role.name);
+}
+
+// ── Service ──────────────────────────────────────────────────────────────────
 
 export const conversationService = {
-  create: async (customerId: string, userId: string) => {
-    // 1. Kiểm tra khách hàng có tồn tại không
+  /**
+   * Creates a new OPEN conversation for a customer.
+   * Does NOT auto-assign the creating user; assignment must be done explicitly.
+   */
+  create: async (customerId: string) => {
+    // Check the customer exists
     const customer = await prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) {
-      const error: any = new Error('Customer not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Customer not found', 404);
     }
 
-    return conversationRepository.create(customerId, userId);
+    return conversationRepository.create(customerId);
   },
 
   findMany: async (userId: string, query: { page?: number; limit?: number }) => {
-    const page = query.page || 1;
-    const limit = query.limit || 10;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
 
     const [items, total] = await Promise.all([
       conversationRepository.findManyByUserId(userId, page, limit),
@@ -37,38 +54,37 @@ export const conversationService = {
   },
 
   findById: async (id: string, userId: string) => {
-    // 1. Tìm kiếm hội thoại
     const conversation = await conversationRepository.findById(id);
     if (!conversation) {
-      const error: any = new Error('Conversation not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Conversation not found', 404);
     }
 
-    // 2. Ràng buộc quyền: Chỉ thành viên trong hội thoại mới được xem
+    // Access control: only members of the conversation can view it
     const isMember = await conversationRepository.isMember(id, userId);
     if (!isMember) {
-      const error: any = new Error('Access denied. You are not a member of this conversation.');
-      error.statusCode = 403;
-      throw error;
+      throw new AppError('Access denied. You are not a member of this conversation.', 403);
     }
 
     return conversation;
   },
 
   sendMessage: async (conversationId: string, userId: string, content: string) => {
-    // 1. Xác thực xem hội thoại có tồn tại và người gửi có phải là thành viên không
+    // Validates conversation existence and membership
     await conversationService.findById(conversationId, userId);
 
     return conversationRepository.createMessage(conversationId, userId, content);
   },
 
-  getMessages: async (conversationId: string, userId: string, query: { page?: number; limit?: number }) => {
-    // 1. Xác thực xem hội thoại có tồn tại và người dùng có phải là thành viên không
+  getMessages: async (
+    conversationId: string,
+    userId: string,
+    query: { page?: number; limit?: number },
+  ) => {
+    // Validates conversation existence and membership
     await conversationService.findById(conversationId, userId);
 
-    const page = query.page || 1;
-    const limit = query.limit || 50; // Mặc định tải 50 tin gần nhất
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
 
     const [items, total] = await Promise.all([
       conversationRepository.findMessages(conversationId, page, limit),
@@ -89,27 +105,38 @@ export const conversationService = {
   // ── Assignment & Status ──────────────────────────────────────────────────
 
   assign: async (conversationId: string, staffUserId: string, actorUserId: string) => {
-    // 1. Kiểm tra conversation tồn tại
+    // 1. Check conversation exists
     const conversation = await conversationRepository.findById(conversationId);
     if (!conversation) {
-      const error: any = new Error('Conversation not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Conversation not found', 404);
     }
 
-    // 2. Không assign nếu đã CLOSED
+    // 2. Cannot assign a CLOSED conversation
     if (conversation.status === 'CLOSED') {
-      const error: any = new Error('Cannot assign a CLOSED conversation. Please reopen it first.');
-      error.statusCode = 400;
-      throw error;
+      throw new AppError('Cannot assign a CLOSED conversation. Please reopen it first.', 400);
     }
 
-    // 3. Kiểm tra staff tồn tại
-    const staff = await prisma.user.findUnique({ where: { id: staffUserId } });
+    // 3. Verify the target staff user exists, has STAFF role, and is active
+    const staff = await prisma.user.findUnique({
+      where: { id: staffUserId },
+      include: { userRoles: { include: { role: true } } },
+    });
     if (!staff) {
-      const error: any = new Error('Staff user not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Staff user not found', 404);
+    }
+    if (!staff.isActive) {
+      throw new AppError('Cannot assign to an inactive staff member', 400);
+    }
+    const staffRoles = staff.userRoles.map((ur) => ur.role.name);
+    if (!staffRoles.includes('STAFF')) {
+      throw new AppError('The specified user does not have the STAFF role', 403);
+    }
+
+    // 4. Role-based access: STAFF can only assign conversations to themselves
+    const actorRoles = await getUserRoles(actorUserId);
+    const isAdmin = actorRoles.includes('ADMIN');
+    if (!isAdmin && staffUserId !== actorUserId) {
+      throw new AppError('STAFF can only assign conversations to themselves', 403);
     }
 
     const assignment = await conversationRepository.assign(conversationId, staffUserId);
@@ -126,20 +153,26 @@ export const conversationService = {
   },
 
   unassign: async (conversationId: string, actorUserId: string) => {
-    // 1. Kiểm tra conversation tồn tại
+    // 1. Check conversation exists
     const conversation = await conversationRepository.findById(conversationId);
     if (!conversation) {
-      const error: any = new Error('Conversation not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Conversation not found', 404);
     }
 
-    // 2. Kiểm tra có assignment đang active không
+    // 2. Check there is an active assignment
     const activeAssignment = await conversationRepository.getActiveAssignment(conversationId);
     if (!activeAssignment) {
-      const error: any = new Error('No active assignment found for this conversation');
-      error.statusCode = 400;
-      throw error;
+      throw new AppError('No active assignment found for this conversation', 400);
+    }
+
+    // 3. Role-based access: STAFF can only unassign conversations assigned to themselves
+    const actorRoles = await getUserRoles(actorUserId);
+    const isAdmin = actorRoles.includes('ADMIN');
+    if (!isAdmin && activeAssignment.userId !== actorUserId) {
+      throw new AppError(
+        'STAFF can only unassign conversations that are assigned to themselves',
+        403,
+      );
     }
 
     const result = await conversationRepository.unassign(conversationId);
@@ -156,19 +189,28 @@ export const conversationService = {
   },
 
   close: async (conversationId: string, actorUserId: string) => {
-    // 1. Kiểm tra conversation tồn tại
+    // 1. Check conversation exists
     const conversation = await conversationRepository.findById(conversationId);
     if (!conversation) {
-      const error: any = new Error('Conversation not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Conversation not found', 404);
     }
 
-    // 2. Không close nếu đã CLOSED rồi
+    // 2. Cannot close an already CLOSED conversation
     if (conversation.status === 'CLOSED') {
-      const error: any = new Error('Conversation is already closed');
-      error.statusCode = 400;
-      throw error;
+      throw new AppError('Conversation is already closed', 400);
+    }
+
+    // 3. Role-based access: STAFF can only close conversations assigned to themselves
+    const actorRoles = await getUserRoles(actorUserId);
+    const isAdmin = actorRoles.includes('ADMIN');
+    if (!isAdmin) {
+      const activeAssignment = await conversationRepository.getActiveAssignment(conversationId);
+      if (!activeAssignment || activeAssignment.userId !== actorUserId) {
+        throw new AppError(
+          'STAFF can only close conversations that are assigned to themselves',
+          403,
+        );
+      }
     }
 
     const result = await conversationRepository.close(conversationId);
@@ -185,19 +227,34 @@ export const conversationService = {
   },
 
   reopen: async (conversationId: string, actorUserId: string) => {
-    // 1. Kiểm tra conversation tồn tại
+    // 1. Check conversation exists
     const conversation = await conversationRepository.findById(conversationId);
     if (!conversation) {
-      const error: any = new Error('Conversation not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Conversation not found', 404);
     }
 
-    // 2. Chỉ có thể reopen nếu đang CLOSED
+    // 2. Can only reopen if CLOSED
     if (conversation.status !== 'CLOSED') {
-      const error: any = new Error(`Cannot reopen a conversation with status: ${conversation.status}`);
-      error.statusCode = 400;
-      throw error;
+      throw new AppError(
+        `Cannot reopen a conversation with status: ${conversation.status}`,
+        400,
+      );
+    }
+
+    // 3. Role-based access: STAFF can only reopen conversations where they were the last assignee
+    const actorRoles = await getUserRoles(actorUserId);
+    const isAdmin = actorRoles.includes('ADMIN');
+    if (!isAdmin) {
+      const lastAssignment = await prisma.assignment.findFirst({
+        where: { conversationId },
+        orderBy: { assignedAt: 'desc' },
+      });
+      if (!lastAssignment || lastAssignment.userId !== actorUserId) {
+        throw new AppError(
+          'STAFF can only reopen conversations that were previously assigned to themselves',
+          403,
+        );
+      }
     }
 
     const result = await conversationRepository.reopen(conversationId);

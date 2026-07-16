@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { conversationRepository } from '../conversation/conversation.repository';
 import { createActivityLog } from '../../common/activityLog';
 
-// ─── Validation Schemas ────────────────────────────────────────────────────────
+// ── Validation Schemas ────────────────────────────────────────────────────────
 
 const joinConversationSchema = z.object({
   conversationId: z.string().uuid('conversationId must be a valid UUID'),
@@ -11,10 +11,14 @@ const joinConversationSchema = z.object({
 
 const sendMessageSchema = z.object({
   conversationId: z.string().uuid('conversationId must be a valid UUID'),
-  content: z.string().min(1, 'Message content cannot be empty').max(5000),
+  content: z
+    .string()
+    .trim()
+    .min(1, 'Message content cannot be empty')
+    .max(2000, 'Message content cannot exceed 2000 characters'),
 });
 
-// ─── Handler Registration ──────────────────────────────────────────────────────
+// ── Handler Registration ──────────────────────────────────────────────────────
 
 /**
  * Registers all Socket.IO event handlers for a connected socket.
@@ -30,14 +34,14 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
       // Check the conversation exists
       const conversation = await conversationRepository.findById(conversationId);
       if (!conversation) {
-        socket.emit('error', { message: 'Conversation not found' });
+        socket.emit('socket_error', { message: 'Conversation not found', code: 404 });
         return;
       }
 
       // Check the user is a member of this conversation
       const isMember = await conversationRepository.isMember(conversationId, userId);
       if (!isMember) {
-        socket.emit('error', {
+        socket.emit('socket_error', {
           message: 'Access denied. You are not a member of this conversation.',
           code: 403,
         });
@@ -62,11 +66,12 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
         entityId: conversationId,
         metadata: { socketId: socket.id },
       }).catch(() => {});
-    } catch (err: any) {
-      if (err?.name === 'ZodError') {
-        socket.emit('error', { message: 'Invalid payload', details: err.errors });
+    } catch (err: unknown) {
+      const error = err as { name?: string; errors?: unknown };
+      if (error?.name === 'ZodError') {
+        socket.emit('socket_error', { message: 'Invalid payload', details: error.errors });
       } else {
-        socket.emit('error', { message: 'Failed to join conversation' });
+        socket.emit('socket_error', { message: 'Failed to join conversation' });
       }
     }
   });
@@ -76,10 +81,20 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
     try {
       const { conversationId, content } = sendMessageSchema.parse(payload);
 
-      // Ensure the socket has joined the room (is a member)
+      // Ensure the socket has already joined the room before sending
+      if (!socket.rooms.has(conversationId)) {
+        socket.emit('socket_error', {
+          message:
+            'You must join the conversation room before sending messages. Emit join_conversation first.',
+          code: 403,
+        });
+        return;
+      }
+
+      // Double-check membership in DB (in case of stale socket state)
       const isMember = await conversationRepository.isMember(conversationId, userId);
       if (!isMember) {
-        socket.emit('error', {
+        socket.emit('socket_error', {
           message: 'Access denied. You are not a member of this conversation.',
           code: 403,
         });
@@ -87,11 +102,7 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
       }
 
       // Save message to the database
-      const message = await conversationRepository.createMessage(
-        conversationId,
-        userId,
-        content,
-      );
+      const message = await conversationRepository.createMessage(conversationId, userId, content);
 
       // Broadcast the new message to ALL members in the room (including sender)
       io.to(conversationId).emit('new_message', {
@@ -102,9 +113,7 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
         sentAt: message.sentAt,
       });
 
-      console.log(
-        `[Socket] userId=${userId} sent message to room=${conversationId}`,
-      );
+      console.log(`[Socket] userId=${userId} sent message to room=${conversationId}`);
 
       // Log the message sent event
       await createActivityLog({
@@ -114,11 +123,12 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
         entityId: conversationId,
         metadata: { messageId: message.id },
       }).catch(() => {});
-    } catch (err: any) {
-      if (err?.name === 'ZodError') {
-        socket.emit('error', { message: 'Invalid payload', details: err.errors });
+    } catch (err: unknown) {
+      const error = err as { name?: string; errors?: unknown; message?: string };
+      if (error?.name === 'ZodError') {
+        socket.emit('socket_error', { message: 'Invalid payload', details: error.errors });
       } else {
-        socket.emit('error', { message: 'Failed to send message' });
+        socket.emit('socket_error', { message: 'Failed to send message' });
 
         // Log the error event
         await createActivityLog({
@@ -126,7 +136,7 @@ export const registerSocketHandlers = (io: Server, socket: Socket) => {
           userId,
           entityType: 'USER',
           entityId: userId,
-          metadata: { event: 'send_message', error: err?.message },
+          metadata: { event: 'send_message', error: error?.message },
         }).catch(() => {});
       }
     }

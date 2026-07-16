@@ -6,17 +6,36 @@ import { conversationController } from './conversation.controller';
 const router = Router();
 
 // ── Conversation CRUD (any authenticated user) ────────────────────────────────
-router.post('/conversations', authGuard as any, conversationController.create as any);
-router.get('/conversations', authGuard as any, conversationController.findMany as any);
-router.get('/conversations/:id', authGuard as any, conversationController.findById as any);
-router.post('/conversations/:id/messages', authGuard as any, conversationController.sendMessage as any);
-router.get('/conversations/:id/messages', authGuard as any, conversationController.getMessages as any);
+router.post('/conversations', authGuard, conversationController.create);
+router.get('/conversations', authGuard, conversationController.findMany);
+router.get('/conversations/:id', authGuard, conversationController.findById);
+router.post('/conversations/:id/messages', authGuard, conversationController.sendMessage);
+router.get('/conversations/:id/messages', authGuard, conversationController.getMessages);
 
 // ── Assignment & Status (ADMIN or STAFF only) ─────────────────────────────────
-router.post('/conversations/:id/assign', authGuard as any, roleGuard('ADMIN', 'STAFF') as any, conversationController.assign as any);
-router.post('/conversations/:id/unassign', authGuard as any, roleGuard('ADMIN', 'STAFF') as any, conversationController.unassign as any);
-router.post('/conversations/:id/close', authGuard as any, roleGuard('ADMIN', 'STAFF') as any, conversationController.close as any);
-router.post('/conversations/:id/reopen', authGuard as any, roleGuard('ADMIN', 'STAFF') as any, conversationController.reopen as any);
+router.post(
+  '/conversations/:id/assign',
+  authGuard,
+  roleGuard('ADMIN', 'STAFF'),
+  conversationController.assign,
+);
+router.post(
+  '/conversations/:id/unassign',
+  authGuard,
+  roleGuard('ADMIN', 'STAFF'),
+  conversationController.unassign,
+);
+router.post(
+  '/conversations/:id/close',
+  authGuard,
+  roleGuard('ADMIN', 'STAFF'),
+  conversationController.close,
+);
+router.post(
+  '/conversations/:id/reopen',
+  authGuard,
+  roleGuard('ADMIN', 'STAFF'),
+  conversationController.reopen,
+);
 
 export default router;
-

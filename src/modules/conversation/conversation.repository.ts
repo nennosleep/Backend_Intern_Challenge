@@ -2,38 +2,26 @@ import { prisma } from '../../config/prisma';
 import { ConversationStatus, ParticipantType, SenderType } from '@prisma/client';
 
 export const conversationRepository = {
-  create: async (customerId: string, userId: string) => {
+  /**
+   * Creates a new OPEN conversation and adds only the customer as a member.
+   * Staff assignment must be done explicitly via the assign() method.
+   */
+  create: async (customerId: string) => {
     return prisma.$transaction(async (tx) => {
-      // 1. Tạo cuộc hội thoại mới
+      // 1. Create new conversation with OPEN status (no auto-assign)
       const conversation = await tx.conversation.create({
         data: {
           customerId,
-          status: ConversationStatus.ASSIGNED,
+          status: ConversationStatus.OPEN,
         },
       });
 
-      // 2. Thêm các thành viên vào cuộc hội thoại (Khách hàng & Nhân viên hỗ trợ tạo)
-      await tx.conversationMember.createMany({
-        data: [
-          {
-            conversationId: conversation.id,
-            participantType: ParticipantType.CUSTOMER,
-            customerId: customerId,
-          },
-          {
-            conversationId: conversation.id,
-            participantType: ParticipantType.USER,
-            userId: userId,
-          },
-        ],
-      });
-
-      // 3. Phân công cuộc hội thoại này cho Nhân viên hỗ trợ tạo
-      await tx.assignment.create({
+      // 2. Add the customer as a member of the conversation
+      await tx.conversationMember.create({
         data: {
           conversationId: conversation.id,
-          userId: userId,
-          isActive: true,
+          participantType: ParticipantType.CUSTOMER,
+          customerId: customerId,
         },
       });
 
@@ -90,7 +78,7 @@ export const conversationRepository = {
 
   createMessage: async (conversationId: string, senderId: string, content: string) => {
     return prisma.$transaction(async (tx) => {
-      // 1. Tạo Message
+      // 1. Create the message
       const message = await tx.message.create({
         data: {
           conversationId,
@@ -100,7 +88,7 @@ export const conversationRepository = {
         },
       });
 
-      // 2. Cập nhật thời gian updatedAt của Conversation
+      // 2. Update the conversation's updatedAt timestamp
       await tx.conversation.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() },
@@ -115,7 +103,7 @@ export const conversationRepository = {
       where: { conversationId },
       skip: (page - 1) * limit,
       take: limit,
-      orderBy: { sentAt: 'asc' }, // Sắp xếp tin nhắn cũ trước mới sau
+      orderBy: { sentAt: 'asc' },
     });
   },
 
@@ -130,73 +118,103 @@ export const conversationRepository = {
   getActiveAssignment: async (conversationId: string) => {
     return prisma.assignment.findFirst({
       where: { conversationId, isActive: true },
+      include: { user: { select: { id: true, name: true, email: true } } },
     });
   },
 
+  /**
+   * Assigns a conversation to a staff member.
+   * Uses a serializable transaction with raw SQL locking to prevent race conditions,
+   * ensuring only one active assignment can exist per conversation at any time.
+   */
   assign: async (conversationId: string, staffUserId: string) => {
-    return prisma.$transaction(async (tx) => {
-      // 1. Deactivate all existing active assignments for this conversation
-      await tx.assignment.updateMany({
-        where: { conversationId, isActive: true },
-        data: { isActive: false, unassignedAt: new Date() },
-      });
+    return prisma.$transaction(
+      async (tx) => {
+        // Row-level lock: prevent concurrent assign on the same conversation
+        await tx.$executeRaw`SELECT id FROM conversations WHERE id = ${conversationId}::uuid FOR UPDATE`;
 
-      // 2. Create new active assignment
-      const assignment = await tx.assignment.create({
-        data: { conversationId, userId: staffUserId, isActive: true },
-      });
-
-      // 3. Update conversation status to ASSIGNED
-      await tx.conversation.update({
-        where: { id: conversationId },
-        data: { status: ConversationStatus.ASSIGNED },
-      });
-
-      // 4. Add staff as a member if not already
-      const existingMember = await tx.conversationMember.findFirst({
-        where: { conversationId, userId: staffUserId },
-      });
-      if (!existingMember) {
-        await tx.conversationMember.create({
-          data: {
-            conversationId,
-            participantType: ParticipantType.USER,
-            userId: staffUserId,
-          },
+        // Deactivate all existing active assignments for this conversation
+        await tx.assignment.updateMany({
+          where: { conversationId, isActive: true },
+          data: { isActive: false, unassignedAt: new Date() },
         });
-      }
 
-      return assignment;
-    });
+        // Create new active assignment
+        const assignment = await tx.assignment.create({
+          data: { conversationId, userId: staffUserId, isActive: true },
+        });
+
+        // Update conversation status to ASSIGNED
+        await tx.conversation.update({
+          where: { id: conversationId },
+          data: { status: ConversationStatus.ASSIGNED },
+        });
+
+        // Add staff as a member if not already a member
+        const existingMember = await tx.conversationMember.findFirst({
+          where: { conversationId, userId: staffUserId },
+        });
+        if (!existingMember) {
+          await tx.conversationMember.create({
+            data: {
+              conversationId,
+              participantType: ParticipantType.USER,
+              userId: staffUserId,
+            },
+          });
+        }
+
+        return assignment;
+      },
+      { isolationLevel: 'Serializable' },
+    );
   },
 
   unassign: async (conversationId: string) => {
-    return prisma.$transaction(async (tx) => {
-      // 1. Deactivate active assignment
-      await tx.assignment.updateMany({
-        where: { conversationId, isActive: true },
-        data: { isActive: false, unassignedAt: new Date() },
-      });
+    return prisma.$transaction(
+      async (tx) => {
+        // Row-level lock
+        await tx.$executeRaw`SELECT id FROM conversations WHERE id = ${conversationId}::uuid FOR UPDATE`;
 
-      // 2. Update conversation status back to OPEN
-      return tx.conversation.update({
-        where: { id: conversationId },
-        data: { status: ConversationStatus.OPEN },
-      });
-    });
+        // Deactivate active assignment
+        await tx.assignment.updateMany({
+          where: { conversationId, isActive: true },
+          data: { isActive: false, unassignedAt: new Date() },
+        });
+
+        // Update conversation status back to OPEN
+        return tx.conversation.update({
+          where: { id: conversationId },
+          data: { status: ConversationStatus.OPEN },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
   },
 
   close: async (conversationId: string) => {
-    return prisma.conversation.update({
-      where: { id: conversationId },
-      data: { status: ConversationStatus.CLOSED },
-    });
+    return prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT id FROM conversations WHERE id = ${conversationId}::uuid FOR UPDATE`;
+        return tx.conversation.update({
+          where: { id: conversationId },
+          data: { status: ConversationStatus.CLOSED },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
   },
 
   reopen: async (conversationId: string) => {
-    return prisma.conversation.update({
-      where: { id: conversationId },
-      data: { status: ConversationStatus.OPEN },
-    });
+    return prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT id FROM conversations WHERE id = ${conversationId}::uuid FOR UPDATE`;
+        return tx.conversation.update({
+          where: { id: conversationId },
+          data: { status: ConversationStatus.OPEN },
+        });
+      },
+      { isolationLevel: 'Serializable' },
+    );
   },
 };
