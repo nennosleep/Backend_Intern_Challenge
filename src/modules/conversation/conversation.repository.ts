@@ -86,14 +86,19 @@ export const conversationRepository = {
     return !!member;
   },
 
-  createMessage: async (conversationId: string, senderId: string, content: string) => {
+  createMessage: async (
+    conversationId: string,
+    senderId: string,
+    content: string,
+    senderType: SenderType = SenderType.USER,
+  ) => {
     return prisma.$transaction(async (tx) => {
       // 1. Create the message
       const message = await tx.message.create({
         data: {
           conversationId,
           senderId,
-          senderType: SenderType.USER,
+          senderType,
           content,
         },
       });

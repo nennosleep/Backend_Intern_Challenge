@@ -2,6 +2,8 @@ import { conversationRepository } from './conversation.repository';
 import { prisma } from '../../config/prisma';
 import { createActivityLog } from '../../common/activityLog';
 import { AppError } from '../../common/appError';
+import { notificationRepository } from '../notification/notification.repository';
+import { SenderType } from '@prisma/client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,11 +70,36 @@ export const conversationService = {
     return conversation;
   },
 
-  sendMessage: async (conversationId: string, userId: string, content: string) => {
-    // Validates conversation existence and membership
-    await conversationService.findById(conversationId, userId);
+  sendMessage: async (
+    conversationId: string,
+    senderId: string,
+    content: string,
+    senderType: SenderType = SenderType.USER,
+  ) => {
+    // Validates conversation existence and membership (only for USER senders)
+    if (senderType === SenderType.USER) {
+      await conversationService.findById(conversationId, senderId);
+    }
 
-    return conversationRepository.createMessage(conversationId, userId, content);
+    const message = await conversationRepository.createMessage(
+      conversationId,
+      senderId,
+      content,
+      senderType,
+    );
+
+    // Notify active assigned staff if the sender is not the staff themselves
+    const activeAssignment = await conversationRepository.getActiveAssignment(conversationId);
+    if (activeAssignment && activeAssignment.userId !== senderId) {
+      await notificationRepository
+        .create(
+          activeAssignment.userId,
+          `New message in conversation ${conversationId}`,
+        )
+        .catch((err) => console.error('Failed to create notification:', err));
+    }
+
+    return message;
   },
 
   getMessages: async (

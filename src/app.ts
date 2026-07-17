@@ -6,6 +6,8 @@ import authRoute from './modules/auth/auth.route';
 import customerRoute from './modules/customer/customer.route';
 import userRoute from './modules/user/user.route';
 import conversationRoute from './modules/conversation/conversation.route';
+import notificationRoute from './modules/notification/notification.route';
+import webhookRoute from './modules/webhook/webhook.route';
 import { errorHandler } from './middlewares/errorHandler';
 
 const app = express();
@@ -17,6 +19,8 @@ app.use('/api', authRoute);
 app.use('/api', customerRoute);
 app.use('/api', userRoute);
 app.use('/api', conversationRoute);
+app.use('/api', notificationRoute);
+app.use('/api', webhookRoute);
 app.use(errorHandler);
 
 export default app;
