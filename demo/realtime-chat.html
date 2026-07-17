@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRM Realtime Chat Demo</title>
+    <script src="https://cdn.socket.io/4.8.0/socket.io.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Segoe UI', sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 24px 16px;
+      }
+
+      h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+        color: #38bdf8;
+      }
+
+      .subtitle {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 24px;
+      }
+
+      .card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 20px;
+        width: 100%;
+        max-width: 540px;
+        margin-bottom: 20px;
+      }
+
+      .card h2 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin-bottom: 14px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      label {
+        display: block;
+        font-size: 0.78rem;
+        color: #64748b;
+        margin-bottom: 4px;
+        margin-top: 10px;
+      }
+
+      input {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 7px;
+        border: 1px solid #334155;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-size: 0.9rem;
+        outline: none;
+        transition: border 0.2s;
+      }
+
+      input:focus {
+        border-color: #38bdf8;
+      }
+
+      .btn {
+        margin-top: 14px;
+        width: 100%;
+        padding: 9px;
+        border: none;
+        border-radius: 7px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.2s;
+      }
+      .btn:hover {
+        opacity: 0.85;
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      .btn-connect {
+        background: #0284c7;
+        color: #fff;
+      }
+      .btn-join {
+        background: #059669;
+        color: #fff;
+      }
+      .btn-send {
+        background: #7c3aed;
+        color: #fff;
+      }
+      .btn-disconnect {
+        background: #dc2626;
+        color: #fff;
+        margin-top: 6px;
+      }
+
+      .status-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 12px;
+        font-size: 0.82rem;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #475569;
+        flex-shrink: 0;
+      }
+      .dot.connected {
+        background: #22c55e;
+      }
+      .dot.joined {
+        background: #38bdf8;
+      }
+      .dot.disconnected {
+        background: #ef4444;
+      }
+
+      #messages {
+        margin-top: 6px;
+        max-height: 300px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 4px 2px;
+      }
+
+      .msg {
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        line-height: 1.45;
+        max-width: 90%;
+        word-break: break-word;
+      }
+
+      .msg.mine {
+        background: #1d4ed8;
+        align-self: flex-end;
+      }
+
+      .msg.theirs {
+        background: #334155;
+        align-self: flex-start;
+      }
+
+      .msg.system {
+        background: #1e293b;
+        border: 1px solid #334155;
+        color: #64748b;
+        align-self: center;
+        font-size: 0.78rem;
+        font-style: italic;
+        max-width: 100%;
+      }
+
+      .msg .meta {
+        font-size: 0.7rem;
+        color: #94a3b8;
+        margin-top: 3px;
+      }
+
+      .send-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .send-row input {
+        flex: 1;
+        margin-top: 0;
+      }
+
+      .send-row button {
+        margin-top: 0;
+        width: auto;
+        padding: 8px 16px;
+        flex-shrink: 0;
+      }
+
+      .tip {
+        font-size: 0.78rem;
+        color: #475569;
+        margin-top: 8px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>CRM Realtime Chat Demo</h1>
+    <p class="subtitle">
+      Open this page in 2 browser tabs to test realtime messaging
+    </p>
+
+    <!-- Connection Card -->
+    <div class="card">
+      <h2>1. Connect</h2>
+
+      <label>Server URL</label>
+      <input id="serverUrl" value="http://localhost:3000" />
+
+      <label>JWT Token</label>
+      <input
+        id="token"
+        placeholder="Paste your JWT token from /api/auth/login"
+      />
+
+      <button class="btn btn-connect" id="btnConnect" onclick="connect()">
+        Connect
+      </button>
+      <button
+        class="btn btn-disconnect"
+        id="btnDisconnect"
+        onclick="disconnect()"
+        disabled
+      >
+        Disconnect
+      </button>
+
+      <div class="status-bar">
+        <div class="dot" id="dotStatus"></div>
+        <span id="statusText">Not connected</span>
+      </div>
+    </div>
+
+    <!-- Join Room Card -->
+    <div class="card">
+      <h2>2. Join Conversation Room</h2>
+
+      <label>Conversation ID (UUID)</label>
+      <input
+        id="conversationId"
+        placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000"
+      />
+
+      <button class="btn btn-join" id="btnJoin" onclick="joinRoom()" disabled>
+        Join Room
+      </button>
+    </div>
+
+    <!-- Chat Card -->
+    <div class="card">
+      <h2>3. Chat</h2>
+
+      <div id="messages">
+        <div class="msg system">
+          Messages will appear here after joining a room...
+        </div>
+      </div>
+
+      <div class="send-row">
+        <input
+          id="msgInput"
+          placeholder="Type a message..."
+          onkeydown="if (event.key === 'Enter') sendMsg();"
+        />
+        <button class="btn btn-send" id="btnSend" onclick="sendMsg()" disabled>
+          Send
+        </button>
+      </div>
+
+      <p class="tip">
+        Open a second tab with a different token to test realtime
+      </p>
+    </div>
+
+    <script>
+      let socket = null;
+      let currentUserId = null;
+      let currentRoom = null;
+
+      // ─── Helpers ──────────────────────────────────────────────────────────────
+
+      function setStatus(state, text) {
+        const dot = document.getElementById('dotStatus');
+        const statusText = document.getElementById('statusText');
+        dot.className = 'dot ' + state;
+        statusText.textContent = text;
+      }
+
+      function appendMessage(content, type = 'system', meta = '') {
+        const container = document.getElementById('messages');
+
+        // Remove placeholder
+        const placeholder = container.querySelector('.msg.system');
+        if (
+          placeholder &&
+          placeholder.textContent.includes('will appear here')
+        ) {
+          placeholder.remove();
+        }
+
+        const div = document.createElement('div');
+        div.className = 'msg ' + type;
+        div.innerHTML = `<div>${content}</div>${meta ? `<div class="meta">${meta}</div>` : ''}`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function parseUserId(token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          return payload.userId || payload.id || 'unknown';
+        } catch {
+          return 'unknown';
+        }
+      }
+
+      // ─── Connect ──────────────────────────────────────────────────────────────
+
+      function connect() {
+        const url = document.getElementById('serverUrl').value.trim();
+        const token = document.getElementById('token').value.trim();
+
+        if (!token) {
+          alert('Please enter a JWT token');
+          return;
+        }
+
+        currentUserId = parseUserId(token);
+
+        socket = io(url, {
+          auth: { token },
+          transports: ['websocket'],
+        });
+
+        socket.on('connect', () => {
+          setStatus('connected', `Connected (socketId: ${socket.id})`);
+          document.getElementById('btnConnect').disabled = true;
+          document.getElementById('btnDisconnect').disabled = false;
+          document.getElementById('btnJoin').disabled = false;
+          appendMessage('Connected to server', 'system');
+        });
+
+        socket.on('connect_error', (err) => {
+          setStatus('disconnected', `Connection failed: ${err.message}`);
+          appendMessage(`Connection error: ${err.message}`, 'system');
+        });
+
+        socket.on('disconnect', (reason) => {
+          setStatus('disconnected', `Disconnected (${reason})`);
+          document.getElementById('btnConnect').disabled = false;
+          document.getElementById('btnDisconnect').disabled = true;
+          document.getElementById('btnJoin').disabled = true;
+          document.getElementById('btnSend').disabled = true;
+          appendMessage(`🔌 Disconnected: ${reason}`, 'system');
+        });
+
+        socket.on('joined_conversation', (data) => {
+          currentRoom = data.conversationId;
+          setStatus(
+            'joined',
+            `Joined room: ${data.conversationId.slice(0, 8)}...`,
+          );
+          document.getElementById('btnSend').disabled = false;
+          appendMessage(`🚪 ${data.message}`, 'system');
+        });
+
+        socket.on('new_message', (data) => {
+          const isMine = data.senderId === currentUserId;
+          const time = new Date(data.sentAt).toLocaleTimeString();
+          appendMessage(
+            data.content,
+            isMine ? 'mine' : 'theirs',
+            `${isMine ? 'You' : 'User ' + data.senderId.slice(0, 8)} • ${time}`,
+          );
+        });
+
+        socket.on('error', (data) => {
+          appendMessage(`⚠️ Error: ${data.message}`, 'system');
+        });
+      }
+
+      // ─── Disconnect ───────────────────────────────────────────────────────────
+
+      function disconnect() {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+        }
+      }
+
+      // ─── Join Room ────────────────────────────────────────────────────────────
+
+      function joinRoom() {
+        const conversationId = document
+          .getElementById('conversationId')
+          .value.trim();
+        if (!conversationId) {
+          alert('Please enter a Conversation ID');
+          return;
+        }
+        if (!socket) {
+          alert('Not connected');
+          return;
+        }
+
+        socket.emit('join_conversation', { conversationId });
+      }
+
+      // ─── Send Message ─────────────────────────────────────────────────────────
+
+      function sendMsg() {
+        const input = document.getElementById('msgInput');
+        const content = input.value.trim();
+        if (!content) return;
+        if (!socket || !currentRoom) {
+          alert('Join a room first');
+          return;
+        }
+
+        socket.emit('send_message', {
+          conversationId: currentRoom,
+          content,
+        });
+
+        input.value = '';
+      }
+    </script>
+  </body>
+</html>
