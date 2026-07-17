@@ -4,9 +4,9 @@ INSERT INTO roles (id, name, created_at) VALUES
 ('22222222-2222-2222-2222-222222222222'::uuid, 'STAFF', now());
 
 -- Users
-INSERT INTO users (id, email, password_hash, name, created_at, updated_at) VALUES
-('a1111111-1111-1111-1111-111111111111'::uuid, 'admin@gmail.com', '$2b$10$hashvalue', 'Admin User', now(), now()),
-('a2222222-2222-2222-2222-222222222222'::uuid, 'staff@gmail.com', '$2b$10$hashvalue', 'Staff User', now(), now());
+INSERT INTO users (id, email, password_hash, name, is_active, created_at, updated_at) VALUES
+('a1111111-1111-1111-1111-111111111111'::uuid, 'admin@gmail.com', '$2b$10$hashvalue', 'Admin User', true, now(), now()),
+('a2222222-2222-2222-2222-222222222222'::uuid, 'staff@gmail.com', '$2b$10$hashvalue', 'Staff User', true, now(), now());
 
 -- User Roles
 INSERT INTO user_roles (id, user_id, role_id, assigned_at) VALUES

@@ -4,10 +4,11 @@ import { conversationController } from './conversation.controller';
 
 const router = Router();
 
-router.post('/conversations', authGuard as any, conversationController.create as any);
-router.get('/conversations', authGuard as any, conversationController.findMany as any);
-router.get('/conversations/:id', authGuard as any, conversationController.findById as any);
-router.post('/conversations/:id/messages', authGuard as any, conversationController.sendMessage as any);
-router.get('/conversations/:id/messages', authGuard as any, conversationController.getMessages as any);
+// ── Conversation CRUD (any authenticated user) ────────────────────────────────
+router.post('/conversations', authGuard, conversationController.create);
+router.get('/conversations', authGuard, conversationController.findMany);
+router.get('/conversations/:id', authGuard, conversationController.findById);
+router.post('/conversations/:id/messages', authGuard, conversationController.sendMessage);
+router.get('/conversations/:id/messages', authGuard, conversationController.getMessages);
 
 export default router;
