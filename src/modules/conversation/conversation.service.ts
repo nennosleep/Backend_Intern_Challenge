@@ -1,22 +1,25 @@
 import { conversationRepository } from './conversation.repository';
 import { prisma } from '../../config/prisma';
+import { createActivityLog } from '../../common/activityLog';
+import { AppError } from '../../common/appError';
 
 export const conversationService = {
-  create: async (customerId: string, userId: string) => {
-    // 1. Kiểm tra khách hàng có tồn tại không
+  /**
+   * Creates a new OPEN conversation for a customer.
+   * Does NOT auto-assign; status starts as OPEN.
+   */
+  create: async (customerId: string) => {
     const customer = await prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) {
-      const error: any = new Error('Customer not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Customer not found', 404);
     }
 
-    return conversationRepository.create(customerId, userId);
+    return conversationRepository.create(customerId);
   },
 
   findMany: async (userId: string, query: { page?: number; limit?: number }) => {
-    const page = query.page || 1;
-    const limit = query.limit || 10;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
 
     const [items, total] = await Promise.all([
       conversationRepository.findManyByUserId(userId, page, limit),
@@ -35,38 +38,37 @@ export const conversationService = {
   },
 
   findById: async (id: string, userId: string) => {
-    // 1. Tìm kiếm hội thoại
     const conversation = await conversationRepository.findById(id);
     if (!conversation) {
-      const error: any = new Error('Conversation not found');
-      error.statusCode = 404;
-      throw error;
+      throw new AppError('Conversation not found', 404);
     }
 
-    // 2. Ràng buộc quyền: Chỉ thành viên trong hội thoại mới được xem
+    // Access control: only members of the conversation can view it
     const isMember = await conversationRepository.isMember(id, userId);
     if (!isMember) {
-      const error: any = new Error('Access denied. You are not a member of this conversation.');
-      error.statusCode = 403;
-      throw error;
+      throw new AppError('Access denied. You are not a member of this conversation.', 403);
     }
 
     return conversation;
   },
 
   sendMessage: async (conversationId: string, userId: string, content: string) => {
-    // 1. Xác thực xem hội thoại có tồn tại và người gửi có phải là thành viên không
+    // Validates conversation existence and membership
     await conversationService.findById(conversationId, userId);
 
     return conversationRepository.createMessage(conversationId, userId, content);
   },
 
-  getMessages: async (conversationId: string, userId: string, query: { page?: number; limit?: number }) => {
-    // 1. Xác thực xem hội thoại có tồn tại và người dùng có phải là thành viên không
+  getMessages: async (
+    conversationId: string,
+    userId: string,
+    query: { page?: number; limit?: number },
+  ) => {
+    // Validates conversation existence and membership
     await conversationService.findById(conversationId, userId);
 
-    const page = query.page || 1;
-    const limit = query.limit || 50; // Mặc định tải 50 tin gần nhất
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
 
     const [items, total] = await Promise.all([
       conversationRepository.findMessages(conversationId, page, limit),

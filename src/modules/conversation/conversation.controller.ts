@@ -1,22 +1,24 @@
-import { Response, NextFunction } from 'express';
-import { AuthRequest } from '../../middlewares/authGuard';
+import { Request, Response, NextFunction } from 'express';
 import { conversationService } from './conversation.service';
-import { createConversationSchema, createMessageSchema, conversationQuerySchema } from './conversation.dto';
+import {
+  createConversationSchema,
+  createMessageSchema,
+  conversationQuerySchema,
+} from './conversation.dto';
 import { successResponse } from '../../common/response';
 
 export const conversationController = {
-  create: async (req: AuthRequest, res: Response, next: NextFunction) => {
+  create: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = createConversationSchema.parse(req.body);
-      const userId = req.user!.userId;
-      const conversation = await conversationService.create(parsed.customerId, userId);
+      const conversation = await conversationService.create(parsed.customerId);
       res.status(201).json(successResponse(conversation, 'Conversation created'));
     } catch (error) {
       next(error);
     }
   },
 
-  findMany: async (req: AuthRequest, res: Response, next: NextFunction) => {
+  findMany: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = conversationQuerySchema.parse(req.query);
       const userId = req.user!.userId;
@@ -27,7 +29,7 @@ export const conversationController = {
     }
   },
 
-  findById: async (req: AuthRequest, res: Response, next: NextFunction) => {
+  findById: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = req.user!.userId;
       const conversation = await conversationService.findById(req.params.id, userId);
@@ -37,7 +39,7 @@ export const conversationController = {
     }
   },
 
-  sendMessage: async (req: AuthRequest, res: Response, next: NextFunction) => {
+  sendMessage: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = createMessageSchema.parse(req.body);
       const userId = req.user!.userId;
@@ -48,7 +50,7 @@ export const conversationController = {
     }
   },
 
-  getMessages: async (req: AuthRequest, res: Response, next: NextFunction) => {
+  getMessages: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = conversationQuerySchema.parse(req.query);
       const userId = req.user!.userId;

@@ -2,38 +2,26 @@ import { prisma } from '../../config/prisma';
 import { ConversationStatus, ParticipantType, SenderType } from '@prisma/client';
 
 export const conversationRepository = {
-  create: async (customerId: string, userId: string) => {
+  /**
+   * Creates a new OPEN conversation and adds only the customer as a member.
+   * Staff assignment must be done explicitly via the assign API (Challenge 6).
+   */
+  create: async (customerId: string) => {
     return prisma.$transaction(async (tx) => {
-      // 1. Tạo cuộc hội thoại mới
+      // 1. Create new conversation with OPEN status (no auto-assign)
       const conversation = await tx.conversation.create({
         data: {
           customerId,
-          status: ConversationStatus.ASSIGNED,
+          status: ConversationStatus.OPEN,
         },
       });
 
-      // 2. Thêm các thành viên vào cuộc hội thoại (Khách hàng & Nhân viên hỗ trợ tạo)
-      await tx.conversationMember.createMany({
-        data: [
-          {
-            conversationId: conversation.id,
-            participantType: ParticipantType.CUSTOMER,
-            customerId: customerId,
-          },
-          {
-            conversationId: conversation.id,
-            participantType: ParticipantType.USER,
-            userId: userId,
-          },
-        ],
-      });
-
-      // 3. Phân công cuộc hội thoại này cho Nhân viên hỗ trợ tạo
-      await tx.assignment.create({
+      // 2. Add the customer as a member of the conversation
+      await tx.conversationMember.create({
         data: {
           conversationId: conversation.id,
-          userId: userId,
-          isActive: true,
+          participantType: ParticipantType.CUSTOMER,
+          customerId: customerId,
         },
       });
 
@@ -90,7 +78,7 @@ export const conversationRepository = {
 
   createMessage: async (conversationId: string, senderId: string, content: string) => {
     return prisma.$transaction(async (tx) => {
-      // 1. Tạo Message
+      // 1. Create the message
       const message = await tx.message.create({
         data: {
           conversationId,
@@ -100,7 +88,7 @@ export const conversationRepository = {
         },
       });
 
-      // 2. Cập nhật thời gian updatedAt của Conversation
+      // 2. Update the conversation's updatedAt timestamp
       await tx.conversation.update({
         where: { id: conversationId },
         data: { updatedAt: new Date() },
@@ -115,7 +103,7 @@ export const conversationRepository = {
       where: { conversationId },
       skip: (page - 1) * limit,
       take: limit,
-      orderBy: { sentAt: 'asc' }, // Sắp xếp tin nhắn cũ trước mới sau
+      orderBy: { sentAt: 'asc' },
     });
   },
 
