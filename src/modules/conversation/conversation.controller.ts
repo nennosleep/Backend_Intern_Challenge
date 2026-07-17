@@ -12,7 +12,10 @@ export const conversationController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const parsed = createConversationSchema.parse(req.body);
-      const conversation = await conversationService.create(parsed.customerId);
+      const conversation = await conversationService.create(
+        parsed.customerId,
+        req.user!.userId,
+      );
       res.status(201).json(successResponse(conversation, 'Conversation created'));
     } catch (error) {
       next(error);

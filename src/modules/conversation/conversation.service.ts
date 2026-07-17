@@ -23,14 +23,14 @@ export const conversationService = {
    * Creates a new OPEN conversation for a customer.
    * Does NOT auto-assign the creating user; assignment must be done explicitly.
    */
-  create: async (customerId: string) => {
+  create: async (customerId: string, creatorUserId: string) => {
     // Check the customer exists
     const customer = await prisma.customer.findUnique({ where: { id: customerId } });
     if (!customer) {
       throw new AppError('Customer not found', 404);
     }
 
-    return conversationRepository.create(customerId);
+    return conversationRepository.create(customerId, creatorUserId);
   },
 
   findMany: async (userId: string, query: { page?: number; limit?: number }) => {

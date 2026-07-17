@@ -3,10 +3,10 @@ import { ConversationStatus, ParticipantType, SenderType } from '@prisma/client'
 
 export const conversationRepository = {
   /**
-   * Creates a new OPEN conversation and adds only the customer as a member.
+   * Creates a new OPEN conversation and adds the customer and creator as members.
    * Staff assignment must be done explicitly via the assign() method.
    */
-  create: async (customerId: string) => {
+  create: async (customerId: string, creatorUserId: string) => {
     return prisma.$transaction(async (tx) => {
       // 1. Create new conversation with OPEN status (no auto-assign)
       const conversation = await tx.conversation.create({
@@ -22,6 +22,16 @@ export const conversationRepository = {
           conversationId: conversation.id,
           participantType: ParticipantType.CUSTOMER,
           customerId: customerId,
+        },
+      });
+
+      // The authenticated user who created the conversation must be able to
+      // access it immediately. Membership is independent from assignment.
+      await tx.conversationMember.create({
+        data: {
+          conversationId: conversation.id,
+          participantType: ParticipantType.USER,
+          userId: creatorUserId,
         },
       });
 

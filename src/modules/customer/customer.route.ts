@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { customerController } from './customer.controller';
+import { authGuard } from '../../middlewares/authGuard';
 
 const router = Router();
 
@@ -30,8 +31,8 @@ const router = Router();
  *       200:
  *         description: List of customers
  */
-router.post('/customers', customerController.create);
-router.get('/customers', customerController.findMany);
+router.post('/customers', authGuard, customerController.create);
+router.get('/customers', authGuard, customerController.findMany);
 
 /**
  * @swagger
@@ -70,8 +71,8 @@ router.get('/customers', customerController.findMany);
  *       200:
  *         description: Customer deleted
  */
-router.get('/customers/:id', customerController.findById);
-router.put('/customers/:id', customerController.update);
-router.delete('/customers/:id', customerController.delete);
+router.get('/customers/:id', authGuard, customerController.findById);
+router.put('/customers/:id', authGuard, customerController.update);
+router.delete('/customers/:id', authGuard, customerController.delete);
 
 export default router;

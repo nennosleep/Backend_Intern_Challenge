@@ -3,6 +3,7 @@ import { RegisterDto, LoginDto } from './auth.dto';
 import { authRepository } from './auth.repository';
 import { signToken } from '../../common/jwt';
 import { createActivityLog } from '../../common/activityLog';
+import { Prisma } from '@prisma/client';
 
 const SALT_ROUNDS = 10;
 
@@ -11,17 +12,27 @@ export const authService = {
     const existing = await authRepository.findbyEmail(data.email);
     if (existing) {
       const error: any = new Error('Email already exists');
-      error.statusCode = 400;
+      error.statusCode = 409;
       throw error;
     }
 
     const passwordHash = await bcrypt.hash(data.password, SALT_ROUNDS);
 
-    const user = await authRepository.create({
-      email: data.email,
-      passwordHash,
-      name: data.name,
-    });
+    let user;
+    try {
+      user = await authRepository.create({
+        email: data.email,
+        passwordHash,
+        name: data.name,
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        const error: any = new Error('Email already exists');
+        error.statusCode = 409;
+        throw error;
+      }
+      throw err;
+    }
 
     const { passwordHash: _, ...safeUser } = user;
     return safeUser;

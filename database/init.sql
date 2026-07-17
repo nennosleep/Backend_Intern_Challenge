@@ -188,7 +188,10 @@ CREATE INDEX "conversation_members_user_id_idx" ON "conversation_members"("user_
 CREATE INDEX "conversation_members_customer_id_idx" ON "conversation_members"("customer_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "conversation_members_conversation_id_user_id_customer_id_key" ON "conversation_members"("conversation_id", "user_id", "customer_id");
+CREATE UNIQUE INDEX "conversation_members_conversation_user_key" ON "conversation_members" ("conversation_id", "user_id") WHERE "user_id" IS NOT NULL;
+
+-- CreateIndex
+CREATE UNIQUE INDEX "conversation_members_conversation_customer_key" ON "conversation_members" ("conversation_id", "customer_id") WHERE "customer_id" IS NOT NULL;
 
 -- CreateIndex
 CREATE INDEX "messages_conversation_id_sent_at_idx" ON "messages"("conversation_id", "sent_at");
