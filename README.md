@@ -102,7 +102,7 @@ Client (Browser / Postman)          Server (Socket.IO)
 | :--- | :--- | :--- |
 | `joined_conversation` | `{ conversationId, message }` | Xác nhận đã join room thành công |
 | `new_message` | `{ id, conversationId, senderId, content, sentAt }` | Tin nhắn mới từ bất kỳ member nào |
-| `error` | `{ message, code? }` | Thông báo lỗi (403, validation, ...) |
+| `socket_error` | `{ message, code? }` | Thông báo lỗi (403, validation, ...) |
 
 ### Cách xác thực (Authentication)
 
