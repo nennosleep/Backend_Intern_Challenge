@@ -142,6 +142,20 @@ Mở file `demo/realtime-chat.html` trong **2 tab trình duyệt** khác nhau:
 
 ---
 
+## Phân quyền & Bảo mật (Challenge 11)
+
+- **Roles**: Hệ thống hỗ trợ 3 vai trò chính:
+  - `ADMIN`: Quản lý toàn bộ hệ thống (xem Users, Customers, gán Role, xem Webhook Logs).
+  - `STAFF`: Quản lý Customer, xử lý các Conversation được phân công, xem dữ liệu nội bộ.
+  - `CUSTOMER`: (Vai trò cho client bên thứ 3) Chỉ xem và gửi Message trong Conversation của chính mình.
+- **Middleware**: Sử dụng `roleGuard` kiểm tra roles lấy từ JWT payload để bảo vệ các endpoints (Vd: `roleGuard('ADMIN')`).
+- **Rate Limit**: Áp dụng `express-rate-limit` chống Spam/Brute Force:
+  - **Auth API** (Login/Register): Tối đa 10 requests / 15 phút.
+  - **Webhook API**: Tối đa 60 requests / 1 phút.
+- **Data Privacy**: Logs hệ thống đảm bảo tuyệt đối không in thông tin nhạy cảm như `token` hay `password`.
+
+---
+
 ## Background Job Queue (Challenge 10)
 
 Hệ thống xử lý các tác vụ nền bằng **BullMQ** kết hợp **Redis** để giảm tải cho API chính (non-blocking). 

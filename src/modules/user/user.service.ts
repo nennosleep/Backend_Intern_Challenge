@@ -14,4 +14,10 @@ export const userService = {
     }
     return user;
   },
+
+  assignRole: async (userId: string, roleName: string) => {
+    // Check if user exists
+    await userService.findById(userId);
+    return userRepository.assignRole(userId, roleName);
+  },
 };

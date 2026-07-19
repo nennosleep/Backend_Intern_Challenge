@@ -67,9 +67,10 @@ export const authService = {
       throw error;
     }
 
-    const accessToken = signToken({ userId: user.id, email: user.email });
-    const { passwordHash: _, ...safeUser } = user;
-    return { accessToken, safeUser };
+    const roles = user.userRoles.map((ur: any) => ur.role.name);
+    const accessToken = signToken({ userId: user.id, email: user.email, roles });
+    const { passwordHash: _, userRoles: __, ...safeUser } = user as any;
+    return { accessToken, safeUser: { ...safeUser, roles } };
   },
 
   getProfile: async (userId: string) => {
@@ -79,7 +80,8 @@ export const authService = {
       error.statusCode = 404;
       throw error;
     }
-    const { passwordHash: _, ...safeUser } = user;
-    return safeUser;
+    const roles = user.userRoles.map((ur: any) => ur.role.name);
+    const { passwordHash: _, userRoles: __, ...safeUser } = user as any;
+    return { ...safeUser, roles };
   },
 };

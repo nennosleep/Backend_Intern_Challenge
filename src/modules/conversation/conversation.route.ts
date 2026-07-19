@@ -7,17 +7,18 @@ import { conversationController } from './conversation.controller';
 const router = Router();
 
 // ── Conversation CRUD (any authenticated user) ────────────────────────────────
-router.post('/conversations', authGuard, conversationController.create);
-router.get('/conversations', authGuard, conversationController.findMany);
-router.get('/conversations/:id', authGuard, conversationController.findById);
-router.post('/conversations/:id/messages', authGuard, conversationController.sendMessage);
+router.post('/conversations', authGuard, roleGuard('ADMIN', 'STAFF', 'CUSTOMER'), conversationController.create);
+router.get('/conversations', authGuard, roleGuard('ADMIN', 'STAFF', 'CUSTOMER'), conversationController.findMany);
+router.get('/conversations/:id', authGuard, roleGuard('ADMIN', 'STAFF', 'CUSTOMER'), conversationController.findById);
+router.post('/conversations/:id/messages', authGuard, roleGuard('ADMIN', 'STAFF', 'CUSTOMER'), conversationController.sendMessage);
 router.post(
   '/conversations/:id/messages/with-attachment',
   authGuard,
+  roleGuard('ADMIN', 'STAFF', 'CUSTOMER'),
   upload.single('file'),
   conversationController.sendMessageWithAttachment,
 );
-router.get('/conversations/:id/messages', authGuard, conversationController.getMessages);
+router.get('/conversations/:id/messages', authGuard, roleGuard('ADMIN', 'STAFF', 'CUSTOMER'), conversationController.getMessages);
 
 // ── Assignment & Status (ADMIN or STAFF only) ─────────────────────────────────
 router.post(
