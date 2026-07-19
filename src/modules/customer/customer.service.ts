@@ -41,25 +41,23 @@ export const customerService = {
 
   findMany: async (query: {
     search?: string;
+    status?: string;
     page?: number;
     limit?: number;
   }) => {
     const page = query.page || 1;
     const limit = query.limit || 10;
 
-    const [items, total] = await Promise.all([
-      customerRepository.findMany({ search: query.search, page, limit }),
-      customerRepository.count(query.search),
-    ]);
+    const result = await customerRepository.findMany({ 
+      search: query.search, 
+      status: query.status,
+      page, 
+      limit 
+    });
 
     return {
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      items: result.data,
+      pagination: result.meta,
     };
   },
 

@@ -39,32 +39,54 @@ export const conversationRepository = {
     });
   },
 
-  findManyByUserId: async (userId: string, page: number, limit: number) => {
-    return prisma.conversation.findMany({
-      where: {
-        members: {
-          some: { userId },
-        },
-      },
-      include: {
-        customer: {
-          select: { id: true, name: true, email: true, phone: true },
-        },
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-      orderBy: { updatedAt: 'desc' },
-    });
-  },
+  findMany: async (params: {
+    userId: string;
+    isAdmin: boolean;
+    status?: ConversationStatus;
+    assignedTo?: string;
+    page: number;
+    limit: number;
+  }) => {
+    const { userId, isAdmin, status, assignedTo, page, limit } = params;
+    
+    const where: any = {};
+    
+    if (!isAdmin) {
+      where.members = { some: { userId } };
+    }
+    
+    if (status) {
+      where.status = status;
+    }
+    
+    if (assignedTo) {
+      where.assignments = { some: { userId: assignedTo, isActive: true } };
+    }
 
-  countByUserId: async (userId: string) => {
-    return prisma.conversation.count({
-      where: {
-        members: {
-          some: { userId },
+    const [data, total] = await prisma.$transaction([
+      prisma.conversation.findMany({
+        where,
+        include: {
+          customer: {
+            select: { id: true, name: true, email: true, phone: true },
+          },
         },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+      }),
+      prisma.conversation.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   },
 
   findById: async (id: string) => {

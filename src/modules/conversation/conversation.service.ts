@@ -3,7 +3,7 @@ import { prisma } from '../../config/prisma';
 import { createActivityLog } from '../../common/activityLog';
 import { AppError } from '../../common/appError';
 import { notificationRepository } from '../notification/notification.repository';
-import { SenderType } from '@prisma/client';
+import { SenderType, ConversationStatus } from '@prisma/client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -35,23 +35,34 @@ export const conversationService = {
     return conversationRepository.create(customerId, creatorUserId);
   },
 
-  findMany: async (userId: string, query: { page?: number; limit?: number }) => {
+  findMany: async (
+    userId: string,
+    query: {
+      status?: string;
+      assignedTo?: string;
+      page?: number;
+      limit?: number;
+    },
+  ) => {
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
+    const status = query.status as ConversationStatus | undefined;
 
-    const [items, total] = await Promise.all([
-      conversationRepository.findManyByUserId(userId, page, limit),
-      conversationRepository.countByUserId(userId),
-    ]);
+    const roles = await getUserRoles(userId);
+    const isAdmin = roles.includes('ADMIN');
+
+    const result = await conversationRepository.findMany({
+      userId,
+      isAdmin,
+      status,
+      assignedTo: query.assignedTo,
+      page,
+      limit,
+    });
 
     return {
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      items: result.data,
+      pagination: result.meta,
     };
   },
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ConversationStatus } from '@prisma/client';
 
 export const createConversationSchema = z.object({
   customerId: z.string().uuid('Invalid customerId format'),
@@ -13,6 +14,8 @@ export const createMessageSchema = z.object({
 });
 
 export const conversationQuerySchema = z.object({
+  status: z.nativeEnum(ConversationStatus).optional(),
+  assignedTo: z.string().uuid('assignedTo must be a valid UUID').optional(),
   page: z.preprocess(
     (val) => (val === undefined || val === '' ? undefined : Number(val)),
     z
