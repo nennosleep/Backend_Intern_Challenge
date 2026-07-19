@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authGuard } from '../../middlewares/authGuard';
 import { roleGuard } from '../../middlewares/roleGuard';
+import { upload } from '../../config/multer';
 import { conversationController } from './conversation.controller';
 
 const router = Router();
@@ -10,6 +11,12 @@ router.post('/conversations', authGuard, conversationController.create);
 router.get('/conversations', authGuard, conversationController.findMany);
 router.get('/conversations/:id', authGuard, conversationController.findById);
 router.post('/conversations/:id/messages', authGuard, conversationController.sendMessage);
+router.post(
+  '/conversations/:id/messages/with-attachment',
+  authGuard,
+  upload.single('file'),
+  conversationController.sendMessageWithAttachment,
+);
 router.get('/conversations/:id/messages', authGuard, conversationController.getMessages);
 
 // ── Assignment & Status (ADMIN or STAFF only) ─────────────────────────────────

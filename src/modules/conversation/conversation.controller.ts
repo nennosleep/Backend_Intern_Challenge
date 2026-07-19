@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
 import { conversationService } from './conversation.service';
+import { attachmentService } from '../attachment/attachment.service';
 import {
   createConversationSchema,
   createMessageSchema,
@@ -7,6 +7,8 @@ import {
   assignConversationSchema,
 } from './conversation.dto';
 import { successResponse } from '../../common/response';
+import { AppError } from '../../common/appError';
+import { Request, Response, NextFunction } from 'express';
 
 export const conversationController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
@@ -49,6 +51,27 @@ export const conversationController = {
       const userId = req.user!.userId;
       const message = await conversationService.sendMessage(req.params.id, userId, parsed.content);
       res.status(201).json(successResponse(message, 'Message sent'));
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  sendMessageWithAttachment: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.file) {
+        throw new AppError('No file uploaded', 400);
+      }
+      
+      const parsed = createMessageSchema.parse(req.body);
+      const userId = req.user!.userId;
+      
+      // 1. Send the message
+      const message = await conversationService.sendMessage(req.params.id, userId, parsed.content);
+      
+      // 2. Attach the file
+      const attachment = await attachmentService.uploadFile(message.id, req.file, userId);
+      
+      res.status(201).json(successResponse({ message, attachment }, 'Message sent with attachment'));
     } catch (error) {
       next(error);
     }
