@@ -6,7 +6,7 @@ import {
   conversationQuerySchema,
   assignConversationSchema,
 } from './conversation.dto';
-import { successResponse } from '../../common/response';
+import { successResponse, paginationResponse } from '../../common/response';
 import { AppError } from '../../common/appError';
 import { Request, Response, NextFunction } from 'express';
 
@@ -29,7 +29,7 @@ export const conversationController = {
       const parsed = conversationQuerySchema.parse(req.query);
       const userId = req.user!.userId;
       const result = await conversationService.findMany(userId, parsed);
-      res.status(200).json(successResponse(result, 'Conversations retrieved'));
+      res.status(200).json(paginationResponse(result.items, result.pagination, 'Conversations retrieved'));
     } catch (error) {
       next(error);
     }
@@ -82,7 +82,7 @@ export const conversationController = {
       const parsed = conversationQuerySchema.parse(req.query);
       const userId = req.user!.userId;
       const result = await conversationService.getMessages(req.params.id, userId, parsed);
-      res.status(200).json(successResponse(result, 'Messages retrieved'));
+      res.status(200).json(paginationResponse(result.items, result.pagination, 'Messages retrieved'));
     } catch (error) {
       next(error);
     }

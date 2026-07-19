@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { notificationService } from './notification.service';
 import { notificationQuerySchema } from './notification.dto';
-import { successResponse } from '../../common/response';
+import { successResponse, paginationResponse } from '../../common/response';
 
 export const notificationController = {
   findMany: async (req: Request, res: Response, next: NextFunction) => {
@@ -9,7 +9,7 @@ export const notificationController = {
       const parsed = notificationQuerySchema.parse(req.query);
       const userId = req.user!.userId;
       const result = await notificationService.findMany(userId, parsed);
-      res.status(200).json(successResponse(result, 'Notifications retrieved successfully'));
+      res.status(200).json(paginationResponse(result.items, result.pagination, 'Notifications retrieved successfully'));
     } catch (error) {
       next(error);
     }

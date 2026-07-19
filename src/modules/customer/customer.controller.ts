@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { customerService } from './customer.service';
 import { createCustomerSchema, updateCustomerSchema, customerQuerySchema } from './customer.dto';
-import { successResponse } from '../../common/response';
+import { successResponse, paginationResponse } from '../../common/response';
 
 export const customerController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
@@ -19,7 +19,7 @@ export const customerController = {
     try {
       const parsed = customerQuerySchema.parse(req.query);
       const result = await customerService.findMany(parsed);
-      res.status(200).json(successResponse(result, 'Customers retrieved'));
+      res.status(200).json(paginationResponse(result.items, result.pagination, 'Customers retrieved'));
     } catch (err) {
       next(err);
     }

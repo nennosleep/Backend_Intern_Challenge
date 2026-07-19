@@ -1,7 +1,15 @@
 export const successResponse = (data: any = {}, message = 'Success') => ({
   success: true,
-  message: 'Success',
+  message,
   data,
+  errors: null,
+});
+
+export const paginationResponse = (data: any, meta: any, message = 'Success') => ({
+  success: true,
+  message,
+  data,
+  meta,
   errors: null,
 });
 

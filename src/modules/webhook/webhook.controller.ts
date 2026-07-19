@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { webhookService } from './webhook.service';
 import { webhookMessageSchema, webhookQuerySchema } from './webhook.dto';
-import { successResponse } from '../../common/response';
+import { successResponse, paginationResponse } from '../../common/response';
 
 export const webhookController = {
   receiveMessage: async (req: Request, res: Response, next: NextFunction) => {
@@ -18,7 +18,7 @@ export const webhookController = {
     try {
       const parsed = webhookQuerySchema.parse(req.query);
       const result = await webhookService.getEvents(parsed);
-      res.status(200).json(successResponse(result, 'Webhook events retrieved'));
+      res.status(200).json(paginationResponse(result.items, result.pagination, 'Webhook events retrieved'));
     } catch (error) {
       next(error);
     }
