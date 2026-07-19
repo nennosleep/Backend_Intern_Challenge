@@ -8,6 +8,15 @@ const options: swaggerJSdoc.Options = {
       version: '1.0.0',
       description: 'API documentation',
     },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: 'http',
+          schema: 'bearer',
+          bearerFormat: 'JWT',
+        },
+      },
+    },
   },
   apis: ['./src/modules/**/*.route.js'],
 };
