@@ -2,6 +2,7 @@ import 'dotenv/config';
 import http from 'http';
 import app from './app';
 import { initSocket } from './modules/socket/socket.gateway';
+import './jobs/notification.job'; // Initialize BullMQ background workers
 
 const PORT = process.env.PORT || 3000;
 

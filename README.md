@@ -44,6 +44,7 @@ DATABASE_URL="postgresql://<user>:<password>@localhost:5432/crm_db?schema=public
 PORT=3000
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=1d
+REDIS_URL="redis://localhost:6379"
 ```
 
 ---
@@ -138,3 +139,24 @@ Mở file `demo/realtime-chat.html` trong **2 tab trình duyệt** khác nhau:
 2. **Tab 2**: Dán JWT token của User B (cùng conversation) → Connect → Join cùng conversation → Thấy tin nhắn của User A xuất hiện realtime.
 
 > File demo: `demo/realtime-chat.html`
+
+---
+
+## Background Job Queue (Challenge 10)
+
+Hệ thống xử lý các tác vụ nền bằng **BullMQ** kết hợp **Redis** để giảm tải cho API chính (non-blocking). 
+Ví dụ: Tạo thông báo (Notification) khi có tin nhắn mới.
+
+### Yêu cầu
+Phải có Redis server đang chạy. Cấu hình dễ dàng qua `docker-compose.yml`:
+```bash
+docker-compose up -d redis
+```
+
+### Flow xử lý thông báo (Notification Flow)
+1. **API**: Người dùng gửi tin nhắn (API `POST /messages`).
+2. **Producer**: API ghi tin nhắn vào DB, sau đó đẩy một job `send-notification` vào `notification-queue` của BullMQ và lập tức trả về kết quả 201 cho Client (không chờ ghi thông báo).
+3. **Queue**: Job nằm trong Redis queue.
+4. **Worker**: Background worker (`src/jobs/notification.job.ts`) lắng nghe, lấy job ra và thực thi việc ghi thông báo vào cơ sở dữ liệu.
+5. **Retry Logic**: Nếu có lỗi khi lưu DB, BullMQ sẽ tự động retry tối đa 3 lần theo thuật toán `exponential backoff` trước khi đánh dấu là thất bại (failed). 
+6. **Logging**: Ghi log ra console qua các event `completed` và `failed`.

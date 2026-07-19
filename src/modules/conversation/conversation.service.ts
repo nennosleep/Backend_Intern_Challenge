@@ -2,7 +2,7 @@ import { conversationRepository } from './conversation.repository';
 import { prisma } from '../../config/prisma';
 import { createActivityLog } from '../../common/activityLog';
 import { AppError } from '../../common/appError';
-import { notificationRepository } from '../notification/notification.repository';
+import { notificationQueue } from '../../jobs/notification.job';
 import { SenderType, ConversationStatus } from '@prisma/client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,12 +102,12 @@ export const conversationService = {
     // Notify active assigned staff if the sender is not the staff themselves
     const activeAssignment = await conversationRepository.getActiveAssignment(conversationId);
     if (activeAssignment && activeAssignment.userId !== senderId) {
-      await notificationRepository
-        .create(
-          activeAssignment.userId,
-          `New message in conversation ${conversationId}`,
-        )
-        .catch((err) => console.error('Failed to create notification:', err));
+      await notificationQueue
+        .add('send-notification', {
+          userId: activeAssignment.userId,
+          message: `New message in conversation ${conversationId}`,
+        })
+        .catch((err) => console.error('Failed to enqueue notification job:', err));
     }
 
     return message;
