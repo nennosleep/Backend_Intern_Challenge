@@ -1,203 +1,122 @@
-# CRM Backend
+# CRM Backend Hệ Thống Quản Lý Khách Hàng Realtime
 
-A Realtime CRM System built with Node.js, TypeScript, Express.js, PostgreSQL, Prisma and Socket.IO.
+## 1. Giới Thiệu Project
+Dự án là một hệ thống **Realtime CRM (Customer Relationship Management)** dành cho doanh nghiệp, cho phép nhân viên (STAFF) và ban quản trị (ADMIN) tương tác, tư vấn và hỗ trợ khách hàng (CUSTOMER) theo thời gian thực. Hệ thống cung cấp API RESTful hoàn chỉnh, phân quyền bảo mật, giao tiếp WebSocket tức thời và kiến trúc xử lý nền (Background Job) chống nghẽn tải.
 
----
+## 2. Công Nghệ Sử Dụng
 
-## Tech Stack
-
-| Layer | Technology |
+| Lớp (Layer) | Công nghệ |
 | :--- | :--- |
-| Runtime | Node.js 20+ |
-| Language | TypeScript |
-| Framework | Express.js |
-| Database | PostgreSQL |
-| ORM | Prisma |
-| Realtime | Socket.IO |
-| Auth | JWT (jsonwebtoken + bcrypt) |
-| Validation | Zod |
-| API Docs | Swagger / OpenAPI |
+| **Runtime** | Node.js (v20+) |
+| **Ngôn ngữ** | TypeScript |
+| **Framework** | Express.js |
+| **Cơ sở dữ liệu** | PostgreSQL |
+| **ORM** | Prisma |
+| **Realtime** | Socket.IO |
+| **Background Job** | BullMQ & Redis |
+| **Xác thực** | JWT (jsonwebtoken + bcrypt) |
+| **Validation** | Zod |
+| **Tài liệu API** | Swagger / OpenAPI |
+| **Triển khai** | Docker & Docker Compose |
 
 ---
 
-## Cách chạy local
+## 3. Database Design
+Hệ thống sử dụng PostgreSQL thông qua Prisma ORM, bao gồm các thực thể chính có quan hệ chặt chẽ (Relational Design):
+- **User**: Bảng người dùng nội bộ (nhân viên, quản trị viên). Có mật khẩu được mã hoá (bcrypt).
+- **Role & UserRole**: Bảng quản lý vai trò (ADMIN, STAFF, CUSTOMER) và bảng trung gian (N-N) để gán vai trò cho User.
+- **Customer**: Bảng lưu trữ thông tin khách hàng, thuộc về một User quản lý (Assigned To).
+- **Conversation**: Bảng quản lý các phiên hội thoại (Chat) giữa Customer và hệ thống. Trạng thái (OPEN, CLOSED).
+- **Message**: Các dòng tin nhắn thực tế trong một hội thoại, có thể đính kèm file (Attachment).
+- **Attachment**: Bảng lưu trữ thông tin về file đính kèm.
+- **WebhookEvent**: Bảng lưu trữ và theo dõi trạng thái các webhook nhận từ hệ thống bên thứ 3 (đảm bảo tính luỹ đẳng).
+- **Notification**: Thông báo sinh ra tự động gửi cho User.
 
+---
+
+## 4. Hướng Dẫn Cài Đặt & Khởi Chạy
+
+### Cách Chạy Bằng Docker (Khuyên Dùng)
+Dự án đã được Dockerize hoàn chỉnh bằng Multi-stage build để tối ưu dung lượng.
 ```bash
-# 1. Chạy tất cả bằng Docker (Khuyên dùng)
+# Chạy toàn bộ hệ thống (App, Postgres, Redis) dưới nền
 docker-compose up --build -d
-
-# Truy cập API tại: http://localhost:3000
-# Truy cập Swagger tại: http://localhost:3000/api-docs
 ```
 
-## Cách chạy local (Không dùng Docker)
-
+### Cách Chạy Local (Không Dùng Docker)
+Yêu cầu: Node.js 20+, PostgreSQL và Redis đã cài đặt.
 ```bash
 # 1. Cài đặt dependencies
 yarn install
 
-# 2. Tạo file .env (xem mẫu bên dưới)
+# 2. Thiết lập file .env (Sử dụng mẫu .env bên dưới)
 
-# 3. Sinh Prisma Client
+# 3. Tạo cấu trúc Database
 npx prisma generate
+npx prisma db push
 
-# 4. Khởi tạo database (chạy init.sql + sample_data.sql trong pgAdmin)
-
-# 5. Chạy server
+# 4. Khởi chạy Server
 yarn dev
 ```
 
-## Mẫu .env
-
+### Mẫu `.env`
 ```env
-DATABASE_URL="postgresql://<user>:<password>@localhost:5432/crm_db?schema=public"
+DATABASE_URL="postgresql://postgres:password@localhost:5432/crm_db?schema=public"
 PORT=3000
-JWT_SECRET=your_jwt_secret_key
+JWT_SECRET=supersecretkey
 JWT_EXPIRES_IN=1d
 REDIS_URL="redis://localhost:6379"
 ```
 
 ---
 
-## API Docs (Swagger)
-
-```
-http://localhost:3000/api-docs
-```
-
-## Health Check
-
-```
-GET http://localhost:3000/api/health
-```
+## 5. API Document
+Tài liệu API được mô tả chi tiết bằng Swagger, cho phép tương tác trực tiếp:
+- **URL**: `http://localhost:3000/api-docs`
 
 ---
 
-## Realtime Chat — WebSocket Flow (Challenge 5)
+## 6. Các Luồng Nghiệp Vụ (Flows & Architecture)
 
-### Kiến trúc
+### 6.1. Auth Flow
+1. **Đăng ký (Register)**: Người dùng (User) gọi API `POST /api/auth/register` với Email, Tên và Mật khẩu. Mật khẩu được mã hoá bằng `bcrypt` trước khi lưu.
+2. **Đăng nhập (Login)**: Gọi `POST /api/auth/login`. Hệ thống so khớp mật khẩu, lấy các Roles tương ứng và trả về chuỗi Token `JWT`.
+3. **Sử dụng API**: Client gắn JWT vào header `Authorization: Bearer <token>` ở các request cần xác thực.
 
-```
-Client (Browser / Postman)          Server (Socket.IO)
-        |                                   |
-        |── connect + JWT token ──────────> |  Middleware xác thực JWT
-        |                                   |  → Gắn userId vào socket.data
-        |                                   |  → Ghi log SOCKET_CONNECTED
-        |                                   |
-        |── emit "join_conversation" ─────> |  Kiểm tra isMember()
-        |   { conversationId }              |  → socket.join(conversationId)
-        |                                   |  → Ghi log SOCKET_JOIN_CONVERSATION
-        |<─ emit "joined_conversation" ──── |
-        |                                   |
-        |── emit "send_message" ──────────> |  Validate nội dung (Zod)
-        |   { conversationId, content }     |  → Lưu message vào DB
-        |                                   |  → io.to(room).emit("new_message")
-        |                                   |  → Ghi log SOCKET_MESSAGE_SENT
-        |<─ emit "new_message" ──────────── |  (Broadcast đến tất cả member trong room)
-        |                                   |
-        |── disconnect ────────────────────>|  → Ghi log SOCKET_DISCONNECTED
-```
+### 6.2. Conversation / Message Flow
+1. **Tạo hội thoại**: Bất kỳ User nào cũng có thể tạo `Conversation` thông qua `POST /api/conversations`.
+2. **Phân công (Assign)**: ADMIN hoặc STAFF sử dụng `POST /api/conversations/:id/assign` để nhận hoặc phân công hội thoại cho nhân viên xử lý.
+3. **Nhắn tin**: Gọi `POST /api/conversations/:id/messages` để gửi text. Nếu có tệp đính kèm, sử dụng endpoint có `multipart/form-data`.
+4. **Đóng hội thoại**: Sau khi xử lý xong, STAFF hoặc ADMIN gọi `POST /api/conversations/:id/close` để hoàn thành.
 
-### Các sự kiện Socket (Events)
+### 6.3. Realtime WebSocket Flow
+Sử dụng Socket.IO với cơ chế bảo vệ bằng JWT.
+1. **Connect**: Client kết nối và gửi JWT trong mục `auth` hoặc `extraHeaders`. Server xác minh JWT và gắn userId vào Socket.
+2. **Join Room**: Client gửi event `join_conversation` cùng `conversationId`. Server check xem User có quyền truy cập không, nếu hợp lệ sẽ join vào Room tương ứng.
+3. **Send Message**: Khi Client gọi API gửi tin nhắn, hoặc emit event `send_message`, Server lưu Database sau đó gọi `io.to(room).emit("new_message")` phát (broadcast) cho tất cả các member đang xem.
 
-#### Client → Server
+> 🛠 *Xem file `demo/realtime-chat.html` để trải nghiệm gửi nhận tin nhắn 2 màn hình.*
 
-| Event | Payload | Mô tả |
-| :--- | :--- | :--- |
-| `join_conversation` | `{ conversationId: string }` | Join vào room của hội thoại |
-| `send_message` | `{ conversationId: string, content: string }` | Gửi tin nhắn realtime |
-
-#### Server → Client
-
-| Event | Payload | Mô tả |
-| :--- | :--- | :--- |
-| `joined_conversation` | `{ conversationId, message }` | Xác nhận đã join room thành công |
-| `new_message` | `{ id, conversationId, senderId, content, sentAt }` | Tin nhắn mới từ bất kỳ member nào |
-| `socket_error` | `{ message, code? }` | Thông báo lỗi (403, validation, ...) |
-
-### Cách xác thực (Authentication)
-
-Client phải gửi JWT token khi kết nối:
-
-```js
-// Cách 1: qua auth object (khuyên dùng)
-const socket = io('http://localhost:3000', {
-  auth: { token: '<JWT_TOKEN>' }
-});
-
-// Cách 2: qua Authorization header
-const socket = io('http://localhost:3000', {
-  extraHeaders: { authorization: 'Bearer <JWT_TOKEN>' }
-});
-```
-
-### Activity Logs được ghi tự động
-
-| Action | Khi nào |
-| :--- | :--- |
-| `SOCKET_CONNECTED` | Client kết nối thành công |
-| `SOCKET_JOIN_CONVERSATION` | Client join room thành công |
-| `SOCKET_MESSAGE_SENT` | Tin nhắn gửi và lưu DB thành công |
-| `SOCKET_DISCONNECTED` | Client ngắt kết nối |
-| `SOCKET_ERROR` | Xảy ra lỗi khi gửi tin nhắn |
-
-### Demo realtime với 2 client
-
-Mở file `demo/realtime-chat.html` trong **2 tab trình duyệt** khác nhau:
-
-1. **Tab 1**: Dán JWT token của User A → Connect → Join conversation → Gửi tin nhắn.
-2. **Tab 2**: Dán JWT token của User B (cùng conversation) → Connect → Join cùng conversation → Thấy tin nhắn của User A xuất hiện realtime.
-
-> File demo: `demo/realtime-chat.html`
+### 6.4. Webhook & Notification Flow
+- **Webhook**: Hệ thống lắng nghe tại `POST /api/webhooks/messages`. Khi có request:
+  1. Kiểm tra header `x-webhook-secret` (Authentication).
+  2. Lưu Webhook Event vào Database kèm EventID (đảm bảo tính Idempotency - không xử lý trùng).
+  3. Đẩy Webhook vào Background Job (BullMQ) để xử lý (trả về 200 OK ngay lập tức).
+- **Background Jobs**:
+  1. **Notification Job**: Khi có tin nhắn mới lưu vào DB, một job sẽ được đẩy vào Queue `notification-queue`.
+  2. **Worker** lắng nghe Redis Queue, lấy job ra xử lý và lưu record vào bảng Notification.
+  3. Tích hợp tự động Retry (tối đa 3 lần) bằng thuật toán Exponential Backoff nếu có lỗi.
 
 ---
 
-## Phân quyền & Bảo mật (Challenge 11)
+## 7. Phân Quyền & Bảo Mật (Security Notes)
 
-- **Roles**: Hệ thống hỗ trợ 3 vai trò chính:
-  - `ADMIN`: Quản lý toàn bộ hệ thống (xem Users, Customers, gán Role, xem Webhook Logs).
-  - `STAFF`: Quản lý Customer, xử lý các Conversation được phân công, xem dữ liệu nội bộ.
-  - `CUSTOMER`: (Vai trò cho client bên thứ 3) Chỉ xem và gửi Message trong Conversation của chính mình.
-- **Middleware**: Sử dụng `roleGuard` kiểm tra roles lấy từ JWT payload để bảo vệ các endpoints (Vd: `roleGuard('ADMIN')`).
-- **Rate Limit**: Áp dụng `express-rate-limit` chống Spam/Brute Force:
-  - **Auth API** (Login/Register): Tối đa 10 requests / 15 phút.
-  - **Webhook API**: Tối đa 60 requests / 1 phút.
-- **Data Privacy**: Logs hệ thống đảm bảo tuyệt đối không in thông tin nhạy cảm như `token` hay `password`.
-
----
-
-## Background Job Queue (Challenge 10)
-
-Hệ thống xử lý các tác vụ nền bằng **BullMQ** kết hợp **Redis** để giảm tải cho API chính (non-blocking). 
-Ví dụ: Tạo thông báo (Notification) khi có tin nhắn mới.
-
-### Yêu cầu
-Phải có Redis server đang chạy. Cấu hình dễ dàng qua `docker-compose.yml`:
-```bash
-docker-compose up -d redis
-```
-
-### Flow xử lý thông báo (Notification Flow)
-1. **API**: Người dùng gửi tin nhắn (API `POST /messages`).
-2. **Producer**: API ghi tin nhắn vào DB, sau đó đẩy một job `send-notification` vào `notification-queue` của BullMQ và lập tức trả về kết quả 201 cho Client (không chờ ghi thông báo).
-3. **Queue**: Job nằm trong Redis queue.
-4. **Worker**: Background worker (`src/jobs/notification.job.ts`) lắng nghe, lấy job ra và thực thi việc ghi thông báo vào cơ sở dữ liệu.
-5. **Retry Logic**: Nếu có lỗi khi lưu DB, BullMQ sẽ tự động retry tối đa 3 lần theo thuật toán `exponential backoff` trước khi đánh dấu là thất bại (failed). 
-6. **Logging**: Ghi log ra console qua các event `completed` và `failed`.
-
----
-
-## Triển khai Docker (Challenge 12)
-
-Dự án đã được Dockerize hoàn chỉnh, giúp việc triển khai trở nên cực kỳ đơn giản và nhanh chóng.
-
-- **Dockerfile**: Sử dụng Multi-stage build (`node:20-alpine`) để giảm thiểu dung lượng image. Chỉ cài đặt production dependencies trong stage cuối cùng.
-- **Docker Compose**: Định nghĩa 3 services liên kết với nhau:
-  - `db`: PostgreSQL database.
-  - `redis`: Redis server (dành cho BullMQ).
-  - `app`: Ứng dụng Node.js (tự động build từ Dockerfile, đợi DB/Redis chạy và tự động chạy `prisma db push` trước khi start).
-- **Lệnh chạy**:
-  ```bash
-  docker-compose up --build -d
-  ```
-  Sau khi container chạy thành công, truy cập Swagger UI tại: [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
+- **Roles & Permissions (RBAC)**:
+  - `ADMIN`: Xem tất cả, quản lý Users, Customers, gán Role, xem Webhook Logs.
+  - `STAFF`: Quản lý Customer của mình, phân công Conversation, nhắn tin.
+  - `CUSTOMER`: Chỉ xem và nhắn tin trong hội thoại mà mình là thành viên.
+- **Bảo Mật Bằng Middleware (`roleGuard`)**: Roles được nhúng sẵn trong Payload của JWT, giúp Middleware kiểm tra quyền cực nhanh mà không cần gọi Database.
+- **Chống Brute Force (Rate Limit)**:
+  - Giới hạn IP ở API `/auth/login` và `/auth/register` (Tối đa 10 requests / 15 phút).
+  - Giới hạn IP ở Webhook (Tối đa 60 requests / 1 phút).
+- **Quyền Riêng Tư (Privacy)**: Các Error Handler và Application Logger được thiết kế để không bao giờ ghi lại Token hay Password ra màn hình console.
