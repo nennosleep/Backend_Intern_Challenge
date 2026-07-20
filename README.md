@@ -23,6 +23,16 @@ A Realtime CRM System built with Node.js, TypeScript, Express.js, PostgreSQL, Pr
 ## Cách chạy local
 
 ```bash
+# 1. Chạy tất cả bằng Docker (Khuyên dùng)
+docker-compose up --build -d
+
+# Truy cập API tại: http://localhost:3000
+# Truy cập Swagger tại: http://localhost:3000/api-docs
+```
+
+## Cách chạy local (Không dùng Docker)
+
+```bash
 # 1. Cài đặt dependencies
 yarn install
 
@@ -174,3 +184,20 @@ docker-compose up -d redis
 4. **Worker**: Background worker (`src/jobs/notification.job.ts`) lắng nghe, lấy job ra và thực thi việc ghi thông báo vào cơ sở dữ liệu.
 5. **Retry Logic**: Nếu có lỗi khi lưu DB, BullMQ sẽ tự động retry tối đa 3 lần theo thuật toán `exponential backoff` trước khi đánh dấu là thất bại (failed). 
 6. **Logging**: Ghi log ra console qua các event `completed` và `failed`.
+
+---
+
+## Triển khai Docker (Challenge 12)
+
+Dự án đã được Dockerize hoàn chỉnh, giúp việc triển khai trở nên cực kỳ đơn giản và nhanh chóng.
+
+- **Dockerfile**: Sử dụng Multi-stage build (`node:20-alpine`) để giảm thiểu dung lượng image. Chỉ cài đặt production dependencies trong stage cuối cùng.
+- **Docker Compose**: Định nghĩa 3 services liên kết với nhau:
+  - `db`: PostgreSQL database.
+  - `redis`: Redis server (dành cho BullMQ).
+  - `app`: Ứng dụng Node.js (tự động build từ Dockerfile, đợi DB/Redis chạy và tự động chạy `prisma db push` trước khi start).
+- **Lệnh chạy**:
+  ```bash
+  docker-compose up --build -d
+  ```
+  Sau khi container chạy thành công, truy cập Swagger UI tại: [http://localhost:3000/api-docs](http://localhost:3000/api-docs)
