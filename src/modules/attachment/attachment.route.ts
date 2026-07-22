@@ -10,12 +10,12 @@ const router = Router();
 router.post(
   '/attachments/upload',
   authGuard,
-  roleGuard('ADMIN', 'STAFF', 'CUSTOMER'),
+  roleGuard(['ADMIN', 'STAFF', 'CUSTOMER']),
   upload.single('file'), // 'file' is the field name for the uploaded file
   attachmentController.uploadFile,
 );
 
 // Endpoint to view/download file
-router.get('/attachments/:id', authGuard, roleGuard('ADMIN', 'STAFF', 'CUSTOMER'), attachmentController.downloadFile);
+router.get('/attachments/:id', authGuard, roleGuard(['ADMIN', 'STAFF', 'CUSTOMER']), attachmentController.downloadFile);
 
 export default router;

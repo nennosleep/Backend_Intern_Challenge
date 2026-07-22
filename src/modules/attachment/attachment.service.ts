@@ -2,6 +2,7 @@ import { attachmentRepository } from './attachment.repository';
 import { conversationRepository } from '../conversation/conversation.repository';
 import { AppError } from '../../common/appError';
 import { SenderType } from '@prisma/client';
+import { prisma } from '../../config/prisma';
 import fs from 'fs';
 import path from 'path';
 
@@ -62,6 +63,3 @@ export const attachmentService = {
     };
   },
 };
-
-// Assuming prisma is imported if we use it directly above, let's fix that.
-import { prisma } from '../../config/prisma';

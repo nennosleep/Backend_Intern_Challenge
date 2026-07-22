@@ -9,6 +9,8 @@ import {
 import { successResponse, paginationResponse } from '../../common/response';
 import { AppError } from '../../common/appError';
 import { Request, Response, NextFunction } from 'express';
+import fs from 'fs';
+import path from 'path';
 
 export const conversationController = {
   create: async (req: Request, res: Response, next: NextFunction) => {
@@ -65,14 +67,27 @@ export const conversationController = {
       const parsed = createMessageSchema.parse(req.body);
       const userId = req.user!.userId;
       
-      // 1. Send the message
-      const message = await conversationService.sendMessage(req.params.id, userId, parsed.content);
-      
-      // 2. Attach the file
-      const attachment = await attachmentService.uploadFile(message.id, req.file, userId);
-      
-      res.status(201).json(successResponse({ message, attachment }, 'Message sent with attachment'));
+      let message;
+      try {
+        // 1. Check if user is member (done inside sendMessage)
+        message = await conversationService.sendMessage(req.params.id, userId, parsed.content);
+        
+        // 2. Attach the file
+        const attachment = await attachmentService.uploadFile(message.id, req.file, userId);
+        
+        res.status(201).json(successResponse({ message, attachment }, 'Message sent with attachment'));
+      } catch (err) {
+        // If anything fails after file upload, clean up the file
+        if (req.file && fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+        throw err;
+      }
     } catch (error) {
+      // Also clean up file if parsing body fails or no file uploaded
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
       next(error);
     }
   },
