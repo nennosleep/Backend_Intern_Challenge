@@ -6,3 +6,238 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+//enum
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+enum ConversationStatus {
+  OPEN
+  ASSIGNED
+  PENDING
+  CLOSED
+}
+
+enum SenderType {
+  USER
+  CUSTOMER
+}
+
+enum ParticipantType {
+  USER
+  CUSTOMER
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+//users
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  userRoles           UserRole[]
+  conversationMembers ConversationMember[]
+  assignments         Assignment[]
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
+
+  @@map("users")
+}
+
+//roles
+model Role {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userRoles UserRole[]
+
+  @@map("roles")
+}
+
+//user_roles
+model UserRole {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+//customers
+model Customer {
+  id        String         @id @default(uuid()) @db.Uuid
+  name      String
+  email     String?        @unique
+  phone     String?        @unique
+  status    CustomerStatus @default(ACTIVE)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  conversations       Conversation[]
+  conversationMembers ConversationMember[]
+
+  @@index([name])
+  @@index([status])
+  @@map("customers")
+}
+
+//conversations
+
+model Conversation {
+  id         String             @id @default(uuid()) @db.Uuid
+  customerId String             @map("customer_id") @db.Uuid
+  status     ConversationStatus @default(OPEN)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+
+  customer    Customer             @relation(fields: [customerId], references: [id])
+  members     ConversationMember[]
+  messages    Message[]
+  assignments Assignment[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("conversations")
+}
+
+//conversation_members
+model ConversationMember {
+  id              String          @id @default(uuid()) @db.Uuid
+  conversationId  String          @map("conversation_id") @db.Uuid
+  participantType ParticipantType @map("participant_type")
+  userId          String?         @map("user_id") @db.Uuid
+  customerId      String?         @map("customer_id") @db.Uuid
+  joinedAt        DateTime        @default(now()) @map("joined_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+  customer     Customer?    @relation(fields: [customerId], references: [id])
+
+  @@unique([conversationId, userId, customerId])
+  @@index([conversationId])
+  @@index([userId])
+  @@index([customerId])
+  @@map("conversation_members")
+}
+
+//messages
+model Message {
+  id             String     @id @default(uuid()) @db.Uuid
+  conversationId String     @map("conversation_id") @db.Uuid
+  senderId       String     @map("sender_id") @db.Uuid
+  senderType     SenderType @map("sender_type")
+  content        String
+  sentAt         DateTime   @default(now()) @map("sent_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  attachments  Attachment[]
+
+  @@index([conversationId, sentAt])
+  @@index([senderId])
+  @@map("messages")
+}
+
+//assignment
+model Assignment {
+  id             String    @id @default(uuid()) @db.Uuid
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  isActive       Boolean   @default(true) @map("is_active")
+  assignedAt     DateTime  @default(now()) @map("assigned_at")
+  unassignedAt   DateTime? @map("unassigned_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([conversationId])
+  @@index([userId])
+  @@map("assignments")
+}
+
+//notifications
+model Notification {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  type           String   @default("SYSTEM") // e.g., NEW_MESSAGE, SYSTEM
+  content        String
+  conversationId String?  @map("conversation_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  metadata       Json?
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([conversationId])
+  @@map("notifications")
+}
+
+//webhook_events
+model WebhookEvent {
+  id        String             @id @default(uuid()) @db.Uuid
+  eventId   String             @unique @map("event_id")
+  payload   Json
+  status    WebhookEventStatus @default(RECEIVED)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  @@index([eventId])
+  @@index([status])
+  @@map("webhook_events")
+}
+
+//attachments
+model Attachment {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  fileName  String   @map("file_name")
+  fileType  String   @map("file_type")
+  fileSize  Int      @map("file_size")
+  filePath  String   @map("file_path")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@index([messageId])
+  @@map("attachments")
+}
+
+//activity_logs
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id") @db.Uuid
+  action     String
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}
