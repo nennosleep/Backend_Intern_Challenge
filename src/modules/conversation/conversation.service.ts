@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { createActivityLog } from '../../common/activityLog';
 import { AppError } from '../../common/appError';
 import { notificationQueue } from '../../jobs/notification.job';
+import { notificationRepository } from '../notification/notification.repository';
 import { SenderType, ConversationStatus } from '@prisma/client';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,12 +103,23 @@ export const conversationService = {
     // Notify active assigned staff if the sender is not the staff themselves
     const activeAssignment = await conversationRepository.getActiveAssignment(conversationId);
     if (activeAssignment && activeAssignment.userId !== senderId) {
-      await notificationQueue
-        .add('send-notification', {
-          userId: activeAssignment.userId,
-          message: `New message in conversation ${conversationId}`,
-        })
-        .catch((err) => console.error('Failed to enqueue notification job:', err));
+      const payload = {
+        userId: activeAssignment.userId,
+        message: `New message in conversation ${conversationId}`,
+        type: 'NEW_MESSAGE',
+        conversationId,
+        messageId: message.id,
+      };
+
+      try {
+        await notificationQueue.add('send-notification', payload);
+      } catch (err: any) {
+        console.error('[Fallback] Failed to enqueue notification job. Redis might be down. Executing fallback directly. Error:', err.message);
+        // Fallback: save directly to DB
+        await notificationRepository
+          .create(payload.userId, payload.message, payload.type, payload.conversationId, payload.messageId)
+          .catch(dbErr => console.error('[Fallback Failed] Could not save notification to DB:', dbErr.message));
+      }
     }
 
     return message;

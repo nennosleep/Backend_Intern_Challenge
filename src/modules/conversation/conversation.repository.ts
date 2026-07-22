@@ -101,10 +101,14 @@ export const conversationRepository = {
     });
   },
 
-  isMember: async (conversationId: string, userId: string) => {
-    const member = await prisma.conversationMember.findFirst({
-      where: { conversationId, userId },
-    });
+  isMember: async (conversationId: string, id: string, participantType: ParticipantType = ParticipantType.USER) => {
+    const where: any = { conversationId, participantType };
+    if (participantType === ParticipantType.USER) {
+      where.userId = id;
+    } else {
+      where.customerId = id;
+    }
+    const member = await prisma.conversationMember.findFirst({ where });
     return !!member;
   },
 
