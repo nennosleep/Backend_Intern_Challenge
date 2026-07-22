@@ -9,6 +9,9 @@ export const userRepository = {
         name: true,
         createdAt: true,
         updatedAt: true,
+        userRoles: {
+          include: { role: true },
+        },
       },
     });
   },
@@ -22,6 +25,9 @@ export const userRepository = {
         name: true,
         createdAt: true,
         updatedAt: true,
+        userRoles: {
+          include: { role: true },
+        },
       },
     });
   },
@@ -50,6 +56,23 @@ export const userRepository = {
 
     return prisma.userRole.create({
       data: {
+        userId,
+        roleId: role.id,
+      },
+    });
+  },
+
+  unassignRole: async (userId: string, roleName: string) => {
+    const role = await prisma.role.findUnique({
+      where: { name: roleName },
+    });
+
+    if (!role) {
+      return null;
+    }
+
+    return prisma.userRole.deleteMany({
+      where: {
         userId,
         roleId: role.id,
       },

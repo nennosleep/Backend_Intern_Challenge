@@ -1,18 +1,25 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from './authGuard';
 import { errorResponse } from '../common/response';
+import { prisma } from '../config/prisma';
 
-/**
- * Factory middleware that checks if the authenticated user has at least one
- * of the specified roles (looked up from the JWT payload).
- *
- * Usage: roleGuard('ADMIN', 'STAFF')
- */
-export const roleGuard = (...allowedRoles: string[]) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    const userRoles = req.user?.roles || [];
+export const roleGuard = (allowedRoles: string[], options?: { strict?: boolean }) => {
+  return async (req: AuthRequest, res: Response, next: NextFunction) => {
+    let userRoles = req.user?.roles || [];
     
-    // Check if user has at least one of the allowed roles
+    // If strict mode, verify against database to prevent stale JWT roles
+    if (options?.strict && req.user?.userId) {
+      try {
+        const dbRoles = await prisma.userRole.findMany({
+          where: { userId: req.user.userId },
+          include: { role: true }
+        });
+        userRoles = dbRoles.map(ur => ur.role.name);
+      } catch (err) {
+        return res.status(500).json(errorResponse('Failed to verify user roles'));
+      }
+    }
+    
     const hasPermission = allowedRoles.some((r) => userRoles.includes(r));
 
     if (!hasPermission) {

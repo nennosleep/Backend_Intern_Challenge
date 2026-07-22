@@ -14,7 +14,7 @@ const router = Router();
  *       200:
  *         description: List of users
  */
-router.get('/users', authGuard, roleGuard('ADMIN'), userController.findMany);
+router.get('/users', authGuard, roleGuard(['ADMIN']), userController.findMany);
 
 /**
  * @swagger
@@ -31,7 +31,7 @@ router.get('/users', authGuard, roleGuard('ADMIN'), userController.findMany);
  *       200:
  *         description: User detail
  */
-router.get('/users/:id', authGuard, roleGuard('ADMIN'), userController.findById);
+router.get('/users/:id', authGuard, roleGuard(['ADMIN']), userController.findById);
 
 /**
  * @swagger
@@ -58,6 +58,33 @@ router.get('/users/:id', authGuard, roleGuard('ADMIN'), userController.findById)
  *       200:
  *         description: Role assigned successfully
  */
-router.post('/users/:id/roles', authGuard, roleGuard('ADMIN'), userController.assignRole);
+router.post('/users/:id/roles', authGuard, roleGuard(['ADMIN']), userController.assignRole);
+
+/**
+ * @swagger
+ * /api/users/{id}/roles:
+ *   delete:
+ *     summary: Remove a role from a user
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               role:
+ *                 type: string
+ *                 enum: [ADMIN, STAFF, CUSTOMER]
+ *     responses:
+ *       200:
+ *         description: Role removed successfully
+ */
+router.delete('/users/:id/roles', authGuard, roleGuard(['ADMIN']), userController.unassignRole);
 
 export default router;

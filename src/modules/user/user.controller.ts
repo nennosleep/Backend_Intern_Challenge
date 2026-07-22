@@ -31,4 +31,15 @@ export const userController = {
       next(err);
     }
   },
+
+  unassignRole: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Re-use assignRoleSchema for validating role in payload
+      const data = assignRoleSchema.parse(req.body);
+      const result = await userService.unassignRole(req.params.id, data.role);
+      res.status(200).json(successResponse(result, 'Role removed successfully'));
+    } catch (err) {
+      next(err);
+    }
+  },
 };
