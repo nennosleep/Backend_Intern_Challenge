@@ -21,21 +21,28 @@ export const webhookService = {
     }
 
     // 2. Verify conversation and membership
-    const isMember = await conversationRepository.isMember(payload.conversationId, payload.customerId);
+    const isMember = await conversationRepository.isMember(payload.conversationId, payload.customerId, 'CUSTOMER');
     if (!isMember) {
+      await webhookRepository.updateEventStatus(payload.eventId, 'FAILED');
       throw new AppError('Customer is not a member of the conversation', 400);
     }
 
     // 3. Process the webhook: Save the incoming message
     // We simulate an incoming message from the customer via the webhook
-    const message = await conversationService.sendMessage(
-      payload.conversationId,
-      payload.customerId,
-      payload.content,
-      SenderType.CUSTOMER
-    );
-
-    return { status: 'processed', messageId: message.id };
+    try {
+      const message = await conversationService.sendMessage(
+        payload.conversationId,
+        payload.customerId,
+        payload.content,
+        SenderType.CUSTOMER
+      );
+      
+      await webhookRepository.updateEventStatus(payload.eventId, 'PROCESSED');
+      return { status: 'processed', messageId: message.id };
+    } catch (err) {
+      await webhookRepository.updateEventStatus(payload.eventId, 'FAILED');
+      throw err;
+    }
   },
 
   getEvents: async (query: { page?: number; limit?: number }) => {

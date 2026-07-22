@@ -11,16 +11,30 @@ export const webhookRepository = {
       data: {
         eventId,
         payload,
+        status: 'RECEIVED',
       },
     });
   },
 
+  updateEventStatus: async (eventId: string, status: 'PROCESSED' | 'FAILED') => {
+    return prisma.webhookEvent.update({
+      where: { eventId },
+      data: { status },
+    });
+  },
+
   findMany: async (page: number, limit: number) => {
-    return prisma.webhookEvent.findMany({
+    const events = await prisma.webhookEvent.findMany({
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     });
+
+    // Mask sensitive payload
+    return events.map(event => ({
+      ...event,
+      payload: { ...((event.payload as any) || {}), content: '***' },
+    }));
   },
 
   count: async () => {

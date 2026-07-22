@@ -1,11 +1,14 @@
 import { prisma } from '../../config/prisma';
 
 export const notificationRepository = {
-  create: async (userId: string, content: string) => {
+  create: async (userId: string, content: string, type: string = 'SYSTEM', conversationId?: string, messageId?: string) => {
     return prisma.notification.create({
       data: {
         userId,
         content,
+        type,
+        conversationId,
+        messageId
       },
     });
   },

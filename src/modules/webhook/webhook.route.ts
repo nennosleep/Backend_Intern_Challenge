@@ -11,6 +11,6 @@ const router = Router();
 router.post('/webhooks/messages', webhookRateLimiter, webhookGuard, webhookController.receiveMessage);
 
 // Admin log viewing
-router.get('/webhooks/events', authGuard, roleGuard('ADMIN'), webhookController.getEvents);
+router.get('/webhooks/events', authGuard, roleGuard(['ADMIN']), webhookController.getEvents);
 
 export default router;
