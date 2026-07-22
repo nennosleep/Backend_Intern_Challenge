@@ -12,6 +12,7 @@ datasource db {
 enum CustomerStatus {
   ACTIVE
   INACTIVE
+  DELETED
 }
 
 enum ConversationStatus {
@@ -29,6 +30,12 @@ enum SenderType {
 enum ParticipantType {
   USER
   CUSTOMER
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
 }
 
 //users
@@ -171,26 +178,34 @@ model Assignment {
 
 //notifications
 model Notification {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  content   String
-  isRead    Boolean  @default(false) @map("is_read")
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  type           String   @default("SYSTEM") // e.g., NEW_MESSAGE, SYSTEM
+  content        String
+  conversationId String?  @map("conversation_id") @db.Uuid
+  messageId      String?  @map("message_id") @db.Uuid
+  metadata       Json?
+  isRead         Boolean  @default(false) @map("is_read")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([conversationId])
   @@map("notifications")
 }
 
 //webhook_events
 model WebhookEvent {
-  id        String   @id @default(uuid()) @db.Uuid
-  eventId   String   @unique @map("event_id")
+  id        String             @id @default(uuid()) @db.Uuid
+  eventId   String             @unique @map("event_id")
   payload   Json
-  createdAt DateTime @default(now()) @map("created_at")
+  status    WebhookEventStatus @default(RECEIVED)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
 
   @@index([eventId])
+  @@index([status])
   @@map("webhook_events")
 }
 

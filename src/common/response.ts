@@ -14,8 +14,8 @@ export const paginationResponse = (data: any, meta: any, message = 'Success') =>
 });
 
 export const errorResponse = (message = 'Error', errors: any = null) => ({
-  success: null,
+  success: false,
   message,
-  data: {},
-  errors: true,
+  data: null,
+  errors: errors || [message],
 });

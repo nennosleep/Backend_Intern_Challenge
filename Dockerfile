@@ -41,7 +41,5 @@ ENV PORT=3000
 # Expose port
 EXPOSE 3000
 
-# Command to run (wait for DB, push schema, start server)
-# Note: In a real production scenario, you would use prisma migrate deploy,
-# but for this challenge we use db push.
-CMD ["sh", "-c", "npx prisma generate && npx prisma db push --accept-data-loss && node dist/server.js"]
+# Command to run (wait for DB, migrate, start server)
+CMD ["sh", "-c", "npx prisma generate && npx prisma migrate deploy && node dist/server.js"]

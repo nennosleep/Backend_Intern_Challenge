@@ -53,10 +53,12 @@ yarn install
 
 # 3. Tạo cấu trúc Database
 npx prisma generate
-npx prisma db push
+npx prisma migrate dev --name init
 
-# 4. Khởi chạy Server
-yarn dev
+# 4. Khởi chạy Server & Worker
+yarn build
+yarn start        # Chạy API Server (node dist/server.js)
+yarn worker       # Chạy Background Worker (node dist/worker.js)
 ```
 
 ### Mẫu `.env`
@@ -115,7 +117,9 @@ Sử dụng Socket.IO với cơ chế bảo vệ bằng JWT.
   - `ADMIN`: Xem tất cả, quản lý Users, Customers, gán Role, xem Webhook Logs.
   - `STAFF`: Quản lý Customer của mình, phân công Conversation, nhắn tin.
   - `CUSTOMER`: Chỉ xem và nhắn tin trong hội thoại mà mình là thành viên.
-- **Bảo Mật Bằng Middleware (`roleGuard`)**: Roles được nhúng sẵn trong Payload của JWT, giúp Middleware kiểm tra quyền cực nhanh mà không cần gọi Database.
+- **Bảo Mật Bằng Middleware (`roleGuard`)**: Hỗ trợ cả hai chế độ:
+  - **Standard Mode**: Kiểm tra vai trò nhanh từ Payload của JWT.
+  - **Strict Mode** (`{ strict: true }`): Kiểm tra trực tiếp vai trò mới nhất từ Database cho các endpoint quan trọng, tránh rủi ro do Token cũ chưa hết hạn khi User bị đổi role.
 - **Chống Brute Force (Rate Limit)**:
   - Giới hạn IP ở API `/auth/login` và `/auth/register` (Tối đa 10 requests / 15 phút).
   - Giới hạn IP ở Webhook (Tối đa 60 requests / 1 phút).

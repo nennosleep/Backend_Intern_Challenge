@@ -1,7 +1,17 @@
 -- CreateEnum
+CREATE TYPE "CustomerStatus" AS ENUM ('ACTIVE', 'INACTIVE', 'DELETED');
+
+-- CreateEnum
 CREATE TYPE "ConversationStatus" AS ENUM ('OPEN', 'ASSIGNED', 'PENDING', 'CLOSED');
+
+-- CreateEnum
 CREATE TYPE "SenderType" AS ENUM ('USER', 'CUSTOMER');
+
+-- CreateEnum
 CREATE TYPE "ParticipantType" AS ENUM ('USER', 'CUSTOMER');
+
+-- CreateEnum
+CREATE TYPE "WebhookEventStatus" AS ENUM ('RECEIVED', 'PROCESSED', 'FAILED');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -9,6 +19,7 @@ CREATE TABLE "users" (
     "email" TEXT NOT NULL,
     "password_hash" TEXT NOT NULL,
     "name" TEXT NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -40,6 +51,7 @@ CREATE TABLE "customers" (
     "name" TEXT NOT NULL,
     "email" TEXT,
     "phone" TEXT,
+    "status" "CustomerStatus" NOT NULL DEFAULT 'ACTIVE',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -66,11 +78,7 @@ CREATE TABLE "conversation_members" (
     "customer_id" UUID,
     "joined_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "conversation_members_pkey" PRIMARY KEY ("id"),
-    CONSTRAINT "conversation_members_participant_check" CHECK (
-        (user_id IS NOT NULL AND customer_id IS NULL AND participant_type = 'USER') OR
-        (user_id IS NULL AND customer_id IS NOT NULL AND participant_type = 'CUSTOMER')
-    )
+    CONSTRAINT "conversation_members_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -101,7 +109,11 @@ CREATE TABLE "assignments" (
 CREATE TABLE "notifications" (
     "id" UUID NOT NULL,
     "user_id" UUID NOT NULL,
+    "type" TEXT NOT NULL DEFAULT 'SYSTEM',
     "content" TEXT NOT NULL,
+    "conversation_id" UUID,
+    "message_id" UUID,
+    "metadata" JSONB,
     "is_read" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -113,7 +125,9 @@ CREATE TABLE "webhook_events" (
     "id" UUID NOT NULL,
     "event_id" TEXT NOT NULL,
     "payload" JSONB NOT NULL,
+    "status" "WebhookEventStatus" NOT NULL DEFAULT 'RECEIVED',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "webhook_events_pkey" PRIMARY KEY ("id")
 );
@@ -148,9 +162,6 @@ CREATE TABLE "activity_logs" (
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
-CREATE INDEX "users_email_idx" ON "users"("email");
-
--- CreateIndex
 CREATE UNIQUE INDEX "roles_name_key" ON "roles"("name");
 
 -- CreateIndex
@@ -170,6 +181,9 @@ CREATE UNIQUE INDEX "customers_phone_key" ON "customers"("phone");
 
 -- CreateIndex
 CREATE INDEX "customers_name_idx" ON "customers"("name");
+
+-- CreateIndex
+CREATE INDEX "customers_status_idx" ON "customers"("status");
 
 -- CreateIndex
 CREATE INDEX "conversations_customer_id_idx" ON "conversations"("customer_id");
@@ -202,16 +216,19 @@ CREATE INDEX "assignments_conversation_id_idx" ON "assignments"("conversation_id
 CREATE INDEX "assignments_user_id_idx" ON "assignments"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "assignments_conversation_active_idx" ON "assignments" ("conversation_id") WHERE ("is_active" = true);
+CREATE INDEX "notifications_user_id_idx" ON "notifications"("user_id");
 
 -- CreateIndex
-CREATE INDEX "notifications_user_id_idx" ON "notifications"("user_id");
+CREATE INDEX "notifications_conversation_id_idx" ON "notifications"("conversation_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "webhook_events_event_id_key" ON "webhook_events"("event_id");
 
 -- CreateIndex
 CREATE INDEX "webhook_events_event_id_idx" ON "webhook_events"("event_id");
+
+-- CreateIndex
+CREATE INDEX "webhook_events_status_idx" ON "webhook_events"("status");
 
 -- CreateIndex
 CREATE INDEX "attachments_message_id_idx" ON "attachments"("message_id");
