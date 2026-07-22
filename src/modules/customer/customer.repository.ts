@@ -1,6 +1,8 @@
 import { prisma } from '../../config/prisma';
 import { CreateCustomerDto, UpdateCustomerDto } from './customer.dto';
 
+import { Prisma } from '@prisma/client';
+
 export const customerRepository = {
   create: (data: CreateCustomerDto) => {
     return prisma.customer.create({ data });
@@ -9,18 +11,21 @@ export const customerRepository = {
   findMany: async (params: { search?: string; status?: string; page?: number; limit?: number }) => {
     const { search, status, page = 1, limit = 10 } = params;
     
-    const where: any = {};
+    const where: Prisma.CustomerWhereInput = {
+      status: { not: 'DELETED' }, // By default, ignore DELETED
+    };
     
     if (search) {
+      const keyword = search.trim();
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } },
+        { name: { contains: keyword, mode: 'insensitive' } },
+        { email: { contains: keyword, mode: 'insensitive' } },
+        { phone: { contains: keyword, mode: 'insensitive' } },
       ];
     }
     
     if (status) {
-      where.status = status;
+      where.status = status as any;
     }
 
     const [data, total] = await prisma.$transaction([
@@ -45,16 +50,19 @@ export const customerRepository = {
   },
 
   count: (search?: string, status?: string) => {
-    const where: any = {};
+    const where: Prisma.CustomerWhereInput = {
+      status: { not: 'DELETED' },
+    };
     if (search) {
+      const keyword = search.trim();
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } },
+        { name: { contains: keyword, mode: 'insensitive' } },
+        { email: { contains: keyword, mode: 'insensitive' } },
+        { phone: { contains: keyword, mode: 'insensitive' } },
       ];
     }
     if (status) {
-      where.status = status;
+      where.status = status as any;
     }
     return prisma.customer.count({ where });
   },
@@ -83,6 +91,6 @@ export const customerRepository = {
   },
 
   delete: (id: string) => {
-    return prisma.customer.delete({ where: { id } });
+    return prisma.customer.update({ where: { id }, data: { status: 'DELETED' } });
   },
 };

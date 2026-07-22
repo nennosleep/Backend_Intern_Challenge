@@ -32,8 +32,8 @@ const router = Router();
  *       200:
  *         description: List of customers
  */
-router.post('/customers', authGuard, roleGuard('ADMIN', 'STAFF'), customerController.create);
-router.get('/customers', authGuard, roleGuard('ADMIN', 'STAFF'), customerController.findMany);
+router.post('/customers', authGuard, roleGuard(['ADMIN', 'STAFF']), customerController.create);
+router.get('/customers', authGuard, roleGuard(['ADMIN', 'STAFF']), customerController.findMany);
 
 /**
  * @swagger
@@ -72,8 +72,8 @@ router.get('/customers', authGuard, roleGuard('ADMIN', 'STAFF'), customerControl
  *       200:
  *         description: Customer deleted
  */
-router.get('/customers/:id', authGuard, roleGuard('ADMIN', 'STAFF'), customerController.findById);
-router.put('/customers/:id', authGuard, roleGuard('ADMIN', 'STAFF'), customerController.update);
-router.delete('/customers/:id', authGuard, roleGuard('ADMIN', 'STAFF'), customerController.delete);
+router.get('/customers/:id', authGuard, roleGuard(['ADMIN', 'STAFF']), customerController.findById);
+router.put('/customers/:id', authGuard, roleGuard(['ADMIN', 'STAFF']), customerController.update);
+router.delete('/customers/:id', authGuard, roleGuard(['ADMIN', 'STAFF']), customerController.delete);
 
 export default router;

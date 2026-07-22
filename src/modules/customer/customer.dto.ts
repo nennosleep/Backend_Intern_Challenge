@@ -25,7 +25,7 @@ export const customerQuerySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === undefined || val === '' ? undefined : Number(val)),
-    z.number().int().positive('Limit must be a positive integer').optional()
+    z.number().int().positive('Limit must be a positive integer').max(100, 'Limit cannot exceed 100').optional()
   ),
 });
 
